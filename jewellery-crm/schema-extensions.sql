@@ -1,6 +1,92 @@
 -- Schema Extensions for Mock Data Replacement
 -- Run these after your main schema to support additional features
 
+-- 0. Business Settings (General tab) and Stores (Stores tab)
+-- Create business_settings as a singleton table controlled by business admin
+DO $$ BEGIN
+    PERFORM 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'business_settings';
+    IF NOT FOUND THEN
+        CREATE TABLE public.business_settings (
+            id integer PRIMARY KEY DEFAULT 1,
+            name text NOT NULL,
+            email text,
+            phone text,
+            address text,
+            website text,
+            description text,
+            updated_by uuid,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now()
+        );
+
+        -- Ensure only one row exists by constraining id to 1
+        CREATE UNIQUE INDEX IF NOT EXISTS business_settings_singleton_idx 
+          ON public.business_settings((1));
+
+        -- RLS: only business_admin can manage
+        ALTER TABLE public.business_settings ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS "Business admins can manage business_settings" ON public.business_settings;
+        CREATE POLICY "Business admins can manage business_settings" ON public.business_settings
+            FOR ALL USING (
+                (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = auth.uid()) = 'business_admin'
+            ) WITH CHECK (
+                (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = auth.uid()) = 'business_admin'
+            );
+
+        -- Trigger to keep updated_at fresh
+        CREATE TRIGGER update_business_settings_updated_at
+        BEFORE UPDATE ON public.business_settings
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
+
+-- Create stores table for managing store locations
+DO $$ BEGIN
+    PERFORM 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'stores';
+    IF NOT FOUND THEN
+        CREATE TABLE public.stores (
+            id serial PRIMARY KEY,
+            name text NOT NULL,
+            code text NOT NULL UNIQUE,
+            address text NOT NULL,
+            city text NOT NULL,
+            state text NOT NULL,
+            phone text,
+            timezone text DEFAULT 'Asia/Kolkata',
+            manager uuid REFERENCES public.team_members(id),
+            is_active boolean DEFAULT true,
+            created_at timestamptz DEFAULT now(),
+            updated_at timestamptz DEFAULT now()
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_stores_code ON public.stores(code);
+        CREATE INDEX IF NOT EXISTS idx_stores_is_active ON public.stores(is_active);
+
+        -- RLS: only business_admin can manage stores (others no access by default)
+        ALTER TABLE public.stores ENABLE ROW LEVEL SECURITY;
+        DROP POLICY IF EXISTS "Business admins can manage all stores" ON public.stores;
+        CREATE POLICY "Business admins can manage all stores" ON public.stores
+            FOR ALL USING (
+                (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = auth.uid()) = 'business_admin'
+            ) WITH CHECK (
+                (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = auth.uid()) = 'business_admin'
+            );
+
+        -- Optional: allow read-only select for floor_manager
+        DROP POLICY IF EXISTS "Floor managers can view stores" ON public.stores;
+        CREATE POLICY "Floor managers can view stores" ON public.stores
+            FOR SELECT USING (
+                (SELECT raw_user_meta_data->>'role' FROM auth.users WHERE id = auth.uid()) = 'floor_manager'
+            );
+
+        CREATE TRIGGER update_stores_updated_at
+        BEFORE UPDATE ON public.stores
+        FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+    END IF;
+END $$;
+
 -- 1. Sales Pipeline / Deals Table
 -- Drop and recreate to ensure correct structure
 DROP TABLE IF EXISTS deals CASCADE;

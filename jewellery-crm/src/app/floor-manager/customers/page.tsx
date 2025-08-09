@@ -64,6 +64,7 @@ export default function FloorManagerCustomersPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -113,6 +114,7 @@ export default function FloorManagerCustomersPage() {
   useEffect(() => {
     if (currentFloor) {
       fetchCustomers();
+      fetchTeamMembers();
     }
   }, [currentFloor]);
 
@@ -138,6 +140,20 @@ export default function FloorManagerCustomersPage() {
       toast.error('Failed to load customers');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTeamMembers = async () => {
+    try {
+      const teamMembersData = await apiService.getTeamMembers();
+      // Filter to show sales team and floor managers
+      const availableMembers = teamMembersData.filter((member: any) => 
+        ['sales_associate', 'floor_manager', 'inhouse_sales'].includes(member.role)
+      );
+      setTeamMembers(availableMembers);
+    } catch (error) {
+      console.error('Error fetching team members:', error);
+      toast.error('Failed to load team members');
     }
   };
 
@@ -285,7 +301,10 @@ export default function FloorManagerCustomersPage() {
             date_of_birth: '', anniversary_date: '', community: '',
             reason_for_visit: '', lead_source: '', age_of_end_user: '', saving_scheme: '',
             preferred_metal: '', preferred_style: '', preferred_occasion: '', budget: '',
-            next_follow_up: '', summary_notes: '', notes: ''
+            next_follow_up: '', summary_notes: '', notes: '',
+            interest_category: '', design_selected: false, wants_more_discount: false,
+            checking_other_jewellers: false, felt_less_variety: false, other_preferences: '',
+            actual_purchase_amount: ''
           });
           setAddOpen(true);
         }}>
@@ -439,7 +458,61 @@ export default function FloorManagerCustomersPage() {
                       <Button variant="outline" size="sm" onClick={() => { setSelectedCustomer(customer); setViewOpen(true); }}>
                         <Eye className="w-4 h-4" />
                       </Button>
-                      <Button variant="outline" size="sm" onClick={() => { setSelectedCustomer(customer); setForm({ name: customer.name, phone: customer.phone, interest: customer.interest, status: customer.status }); setEditOpen(true); }}>
+                      <Button variant="outline" size="sm" onClick={() => {
+                        setSelectedCustomer(customer);
+                        const c: any = customer as any;
+                        
+                        // Handle name splitting if first_name/last_name are not available
+                        let firstName = c.first_name || '';
+                        let lastName = c.last_name || '';
+                        
+                        if (!firstName && !lastName && customer.name) {
+                          const nameParts = customer.name.split(' ');
+                          firstName = nameParts[0] || '';
+                          lastName = nameParts.slice(1).join(' ') || '';
+                        }
+                        
+                        setForm({
+                          ...form,
+                          first_name: firstName,
+                          last_name: lastName,
+                          name: customer.name || '',
+                          phone: customer.phone || '',
+                          email: c.email || '',
+                          interest: customer.interest || '',
+                          floor: customer.floor || form.floor,
+                          visited_date: (c.visited_date || form.visited_date),
+                          status: (customer.status as any) || form.status,
+                          assigned_to: c.assigned_to || form.assigned_to,
+                          address: c.address || '',
+                          city: c.city || '',
+                          state: c.state || '',
+                          country: c.country || 'India',
+                          catchment_area: c.catchment_area || '',
+                          date_of_birth: c.date_of_birth || '',
+                          anniversary_date: c.anniversary_date || '',
+                          community: c.community || '',
+                          reason_for_visit: c.reason_for_visit || '',
+                          lead_source: c.lead_source || '',
+                          age_of_end_user: c.age_of_end_user || '',
+                          saving_scheme: c.saving_scheme || '',
+                          preferred_metal: c.preferred_metal || '',
+                          preferred_style: c.preferred_style || '',
+                          preferred_occasion: c.preferred_occasion || '',
+                          budget: c.budget || '',
+                          next_follow_up: c.next_follow_up || '',
+                          summary_notes: c.summary_notes || '',
+                          notes: c.notes || '',
+                          interest_category: '',
+                          design_selected: false,
+                          wants_more_discount: false,
+                          checking_other_jewellers: false,
+                          felt_less_variety: false,
+                          other_preferences: '',
+                          actual_purchase_amount: ''
+                        });
+                        setEditOpen(true);
+                      }}>
                         <Edit className="w-4 h-4" />
                       </Button>
                       <Button variant="outline" size="sm" onClick={() => { setSelectedCustomer(customer); setMessageText(''); setMessageOpen(true); }}>
@@ -492,7 +565,7 @@ export default function FloorManagerCustomersPage() {
                 <Input type="date" placeholder="Visited Date *" value={form.visited_date} onChange={(e) => setForm({ ...form, visited_date: e.target.value })} />
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
-                <ShSelect value={form.floor.toString()} onValueChange={(v: string) => setForm({ ...form, floor: parseInt(v) })}>
+                <ShSelect value={form.floor != null ? String(form.floor) : undefined} onValueChange={(v: string) => setForm({ ...form, floor: parseInt(v) })}>
                   <ShSelectTrigger><ShSelectValue placeholder="Floor *" /></ShSelectTrigger>
                   <ShSelectContent>
                     <ShSelectItem value="1">Floor 1</ShSelectItem>
@@ -509,6 +582,21 @@ export default function FloorManagerCustomersPage() {
                     <ShSelectItem value="active">Active</ShSelectItem>
                     <ShSelectItem value="inactive">Inactive</ShSelectItem>
                     <ShSelectItem value="vip">VIP</ShSelectItem>
+                  </ShSelectContent>
+                </ShSelect>
+                <ShSelect 
+                  value={form.assigned_to || ''} 
+                  onValueChange={(v: string) => setForm({ ...form, assigned_to: v === 'unassigned' ? undefined : v })}
+
+                >
+                  <ShSelectTrigger><ShSelectValue placeholder="Assign To" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    <ShSelectItem value="unassigned">Leave Unassigned</ShSelectItem>
+                    {teamMembers.map((member) => (
+                      <ShSelectItem key={member.id} value={member.id}>
+                        {member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim()}
+                      </ShSelectItem>
+                    ))}
                   </ShSelectContent>
                 </ShSelect>
               </div>
@@ -535,8 +623,14 @@ export default function FloorManagerCustomersPage() {
             <div className="border rounded-lg p-4">
               <div className="font-semibold mb-4">Personal</div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <Input type="date" placeholder="Date of Birth" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
-                <Input type="date" placeholder="Anniversary Date" value={form.anniversary_date} onChange={(e) => setForm({ ...form, anniversary_date: e.target.value })} />
+                <div>
+                  <label className="block text-sm font-medium mb-1">D.O.B</label>
+                  <Input type="date" placeholder="mm/dd/yyyy" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Anniversary</label>
+                  <Input type="date" placeholder="mm/dd/yyyy" value={form.anniversary_date} onChange={(e) => setForm({ ...form, anniversary_date: e.target.value })} />
+                </div>
                 <ShSelect value={form.community} onValueChange={(v) => setForm({ ...form, community: v })}>
                   <ShSelectTrigger><ShSelectValue placeholder="Select Community" /></ShSelectTrigger>
                   <ShSelectContent>
@@ -586,9 +680,9 @@ export default function FloorManagerCustomersPage() {
                 </ShSelect>
                 <ShSelect value={form.saving_scheme} onValueChange={(v) => setForm({ ...form, saving_scheme: v })}>
                   <ShSelectTrigger><ShSelectValue placeholder="Saving Scheme" /></ShSelectTrigger>
-                  <ShSelectContent>
-                    <ShSelectItem value="active">Active</ShSelectItem>
-                    <ShSelectItem value="inactive">Inactive</ShSelectItem>
+              <ShSelectContent>
+                <ShSelectItem value="active">Active</ShSelectItem>
+                <ShSelectItem value="inactive">Inactive</ShSelectItem>
                     <ShSelectItem value="completed">Completed</ShSelectItem>
                     <ShSelectItem value="not_interested">Not Interested</ShSelectItem>
                   </ShSelectContent>
@@ -619,8 +713,8 @@ export default function FloorManagerCustomersPage() {
                       <ShSelectItem value="diamond">Diamond</ShSelectItem>
                       <ShSelectItem value="silver">Silver</ShSelectItem>
                       <ShSelectItem value="platinum">Platinum</ShSelectItem>
-                    </ShSelectContent>
-                  </ShSelect>
+              </ShSelectContent>
+            </ShSelect>
                 </div>
 
                 <div className="rounded-md border p-3 space-y-2 bg-white">
@@ -674,10 +768,10 @@ export default function FloorManagerCustomersPage() {
             <Button onClick={async () => {
               try {
                 if (!currentFloor) return;
-                if (!form.first_name.trim() && !form.name.trim()) { toast.error('First name or full name is required'); return; }
-                if (!form.phone.trim()) { toast.error('Phone is required'); return; }
-                if (!/^\+?[0-9\s-]{10,}$/.test(form.phone.trim())) { toast.error('Enter a valid phone number'); return; }
-                if (!form.interest.trim()) { toast.error('Interest is required'); return; }
+                if (!(form.first_name || '').toString().trim() && !(form.name || '').toString().trim()) { toast.error('First name or full name is required'); return; }
+                if (!(form.phone || '').toString().trim()) { toast.error('Phone is required'); return; }
+                if (!/^\+?[0-9\s-]{10,}$/.test(((form.phone || '') as string).trim())) { toast.error('Enter a valid phone number'); return; }
+                if (!(form.interest || '').toString().trim() && !(form as any).interest_category) { toast.error('Interest is required'); return; }
                 if (!form.visited_date) { toast.error('Visited date is required'); return; }
 
                 const payload: any = {
@@ -701,46 +795,205 @@ export default function FloorManagerCustomersPage() {
                 toast.error('Failed to add customer');
               }
             }} disabled={!
-              ((form.first_name.trim().length>0 || form.name.trim().length>0) &&
-               form.phone.trim().length>0 &&
-               form.interest.trim().length>0 &&
+              ((((form.first_name || '').toString().trim().length>0) || ((form.name || '').toString().trim().length>0)) &&
+               ((form.phone || '').toString().trim().length>0) &&
+               (((form.interest || '').toString().trim().length>0) || ((form as any).interest_category)) &&
                !!form.visited_date)
             }>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Customer Modal */}
+      {/* Edit Customer Modal – full form */}
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-w-xl w-full max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-3xl w-full max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>Edit Customer</DialogTitle></DialogHeader>
-          <div className="space-y-3">
-            <Input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-            <div className="grid grid-cols-2 gap-3">
-              <Input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
-              <Input placeholder="Interest" value={form.interest} onChange={(e) => setForm({ ...form, interest: e.target.value })} />
+          <DialogDescription>Update any of the customer details below.</DialogDescription>
+          <div className="space-y-6">
+            {/* Customer Details */}
+            <div className="border rounded-lg p-4">
+              <div className="font-semibold mb-4">Customer Details</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input placeholder="First Name" value={form.first_name} onChange={(e) => setForm({ ...form, first_name: e.target.value })} />
+                <Input placeholder="Last Name" value={form.last_name} onChange={(e) => setForm({ ...form, last_name: e.target.value })} />
+                <Input placeholder="Phone *" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                <Input placeholder="Email" type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                <Input placeholder="Interest (e.g., Gold Necklace)" value={form.interest} onChange={(e) => setForm({ ...form, interest: e.target.value })} />
+                <Input type="date" placeholder="Visited Date" value={form.visited_date} onChange={(e) => setForm({ ...form, visited_date: e.target.value })} />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mt-3">
+                <ShSelect value={form.floor != null ? String(form.floor) : undefined} onValueChange={(v: string) => setForm({ ...form, floor: parseInt(v) })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Floor" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    <ShSelectItem value="1">Floor 1</ShSelectItem>
+                    <ShSelectItem value="2">Floor 2</ShSelectItem>
+                    <ShSelectItem value="3">Floor 3</ShSelectItem>
+                  </ShSelectContent>
+                </ShSelect>
+                <ShSelect value={form.status} onValueChange={(v: any) => setForm({ ...form, status: v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Status" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    <ShSelectItem value="lead">Lead</ShSelectItem>
+                    <ShSelectItem value="prospect">Prospect</ShSelectItem>
+                    <ShSelectItem value="customer">Customer</ShSelectItem>
+                    <ShSelectItem value="active">Active</ShSelectItem>
+                    <ShSelectItem value="inactive">Inactive</ShSelectItem>
+                    <ShSelectItem value="vip">VIP</ShSelectItem>
+                  </ShSelectContent>
+                </ShSelect>
+                <ShSelect value={form.assigned_to || ''} onValueChange={(v: string) => setForm({ ...form, assigned_to: v === 'unassigned' ? undefined : v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Assign To" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    <ShSelectItem value="unassigned">Leave Unassigned</ShSelectItem>
+                    {teamMembers.map((member) => (
+                      <ShSelectItem key={member.id} value={member.id}>
+                        {member.name || `${member.first_name || ''} ${member.last_name || ''}`.trim()}
+                      </ShSelectItem>
+                    ))}
+                  </ShSelectContent>
+                </ShSelect>
+              </div>
             </div>
-            <ShSelect value={form.status} onValueChange={(v: 'active' | 'inactive') => setForm({ ...form, status: v })}>
-              <ShSelectTrigger><ShSelectValue placeholder="Status" /></ShSelectTrigger>
+
+            {/* Address */}
+            <div className="border rounded-lg p-4">
+              <div className="font-semibold mb-4">Address</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input placeholder="Street Address" value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+                <Input placeholder="City" value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} />
+                <ShSelect value={form.state} onValueChange={(v: string) => setForm({ ...form, state: v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Select State" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    {INDIAN_STATES.map((s) => (
+                      <ShSelectItem key={s as string} value={s as string}>{s as string}</ShSelectItem>
+                    ))}
+                  </ShSelectContent>
+                </ShSelect>
+                <Input placeholder="Country" value={form.country} onChange={(e) => setForm({ ...form, country: e.target.value })} />
+                <Input placeholder="Catchment Area" value={form.catchment_area} onChange={(e) => setForm({ ...form, catchment_area: e.target.value })} />
+              </div>
+            </div>
+
+            {/* Personal */}
+            <div className="border rounded-lg p-4">
+              <div className="font-semibold mb-4">Personal</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">D.O.B</label>
+                  <Input type="date" placeholder="mm/dd/yyyy" value={form.date_of_birth} onChange={(e) => setForm({ ...form, date_of_birth: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Anniversary</label>
+                  <Input type="date" placeholder="mm/dd/yyyy" value={form.anniversary_date} onChange={(e) => setForm({ ...form, anniversary_date: e.target.value })} />
+                </div>
+                <ShSelect value={form.community} onValueChange={(v) => setForm({ ...form, community: v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Select Community" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    {COMMUNITY_OPTIONS.map(c => (
+                      <ShSelectItem key={c.value} value={c.value}>{c.label}</ShSelectItem>
+                    ))}
+                  </ShSelectContent>
+                </ShSelect>
+              </div>
+            </div>
+
+            {/* Demographics & Visit */}
+            <div className="border rounded-lg p-4">
+              <div className="font-semibold mb-4">Demographics & Visit</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <ShSelect value={form.reason_for_visit} onValueChange={(v) => setForm({ ...form, reason_for_visit: v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Reason for Visit" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    <ShSelectItem value="purchase">Purchase</ShSelectItem>
+                    <ShSelectItem value="inquiry">Inquiry</ShSelectItem>
+                    <ShSelectItem value="repair">Repair</ShSelectItem>
+                    <ShSelectItem value="exchange">Exchange</ShSelectItem>
+                    <ShSelectItem value="maintenance">Maintenance</ShSelectItem>
+                    <ShSelectItem value="other">Other</ShSelectItem>
+                  </ShSelectContent>
+                </ShSelect>
+                <ShSelect value={form.lead_source} onValueChange={(v) => setForm({ ...form, lead_source: v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Lead Source" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    <ShSelectItem value="walkin">Walk-in</ShSelectItem>
+                    <ShSelectItem value="referral">Referral</ShSelectItem>
+                    <ShSelectItem value="online">Online</ShSelectItem>
+                    <ShSelectItem value="social_media">Social Media</ShSelectItem>
+                    <ShSelectItem value="advertisement">Advertisement</ShSelectItem>
+                    <ShSelectItem value="other">Other</ShSelectItem>
+                  </ShSelectContent>
+                </ShSelect>
+                <ShSelect value={form.age_of_end_user} onValueChange={(v) => setForm({ ...form, age_of_end_user: v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Age of End-User" /></ShSelectTrigger>
+                  <ShSelectContent>
+                    <ShSelectItem value="18-25">18-25</ShSelectItem>
+                    <ShSelectItem value="26-35">26-35</ShSelectItem>
+                    <ShSelectItem value="36-50">36-50</ShSelectItem>
+                    <ShSelectItem value="51-65">51-65</ShSelectItem>
+                    <ShSelectItem value="65+">65+</ShSelectItem>
+                  </ShSelectContent>
+                </ShSelect>
+                <ShSelect value={form.saving_scheme} onValueChange={(v) => setForm({ ...form, saving_scheme: v })}>
+                  <ShSelectTrigger><ShSelectValue placeholder="Saving Scheme" /></ShSelectTrigger>
               <ShSelectContent>
                 <ShSelectItem value="active">Active</ShSelectItem>
                 <ShSelectItem value="inactive">Inactive</ShSelectItem>
+                    <ShSelectItem value="completed">Completed</ShSelectItem>
+                    <ShSelectItem value="not_interested">Not Interested</ShSelectItem>
               </ShSelectContent>
             </ShSelect>
+              </div>
+            </div>
+
+            {/* Customer Preferences */}
+            <div className="border rounded-lg p-4">
+              <div className="font-semibold mb-4">Customer Preferences</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input placeholder="Preferred Metal" value={form.preferred_metal} onChange={(e) => setForm({ ...form, preferred_metal: e.target.value })} />
+                <Input placeholder="Preferred Style" value={form.preferred_style} onChange={(e) => setForm({ ...form, preferred_style: e.target.value })} />
+                <Input placeholder="Occasion" value={form.preferred_occasion} onChange={(e) => setForm({ ...form, preferred_occasion: e.target.value })} />
+                <Input placeholder="Budget" value={form.budget} onChange={(e) => setForm({ ...form, budget: e.target.value })} />
+              </div>
+            </div>
+
+            {/* Follow-up & Summary */}
+            <div className="border rounded-lg p-4">
+              <div className="font-semibold mb-4">Follow-up & Summary</div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <Input type="date" placeholder="Next Follow-up Date" value={form.next_follow_up} onChange={(e) => setForm({ ...form, next_follow_up: e.target.value })} />
+                <Textarea placeholder="Summary Notes of Visit" value={form.summary_notes} onChange={(e) => setForm({ ...form, summary_notes: e.target.value })} />
+              </div>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setEditOpen(false)}>Cancel</Button>
             <Button onClick={async () => {
               try {
                 if (!selectedCustomer) return;
-                await apiService.updateCustomer(selectedCustomer.id, { name: form.name, phone: form.phone, interest: form.interest, status: form.status });
+                const payload: any = { ...form };
+                // Compose full name if first/last provided
+                const composed = `${(form.first_name || '').toString().trim()} ${(form.last_name || '').toString().trim()}`.trim();
+                if (composed) payload.name = composed;
+                if (!(payload.interest || '').toString().trim() && (form as any).interest_category) {
+                  payload.interest = (form as any).interest_category;
+                }
+                // Remove local-only interest helper fields
+                delete payload.interest_category;
+                delete payload.design_selected;
+                delete payload.wants_more_discount;
+                delete payload.checking_other_jewellers;
+                delete payload.felt_less_variety;
+                delete payload.other_preferences;
+                delete payload.actual_purchase_amount;
+
+                await apiService.updateCustomer(selectedCustomer.id, payload);
                 setEditOpen(false);
                 setSelectedCustomer(null);
                 fetchCustomers();
               } catch (e) {
                 toast.error('Failed to update customer');
               }
-            }} disabled={!selectedCustomer || !form.name || !form.phone || !form.interest}>Save</Button>
+            }}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

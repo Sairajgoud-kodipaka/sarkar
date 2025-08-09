@@ -73,8 +73,11 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { apiService } from '@/lib/api-service';
+import AddStoreModal from '@/components/stores/AddStoreModal';
+import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
 
+// Align with apiService TeamMember shape (floor displayed as string like "Floor 1")
 interface TeamMember {
   id: string;
   name: string;
@@ -84,7 +87,7 @@ interface TeamMember {
   avatar?: string;
   lastActive?: string;
   phone?: string;
-  floor?: number;
+  floor?: string | number;
   joinDate?: string;
   performance?: {
     sales: number;
@@ -126,6 +129,7 @@ export default function SettingsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingGeneral, setSavingGeneral] = useState(false);
   
   // Modal states
   const [showAddModal, setShowAddModal] = useState(false);
@@ -157,17 +161,37 @@ export default function SettingsPage() {
   const [submitting, setSubmitting] = useState(false);
   
   const [businessInfo, setBusinessInfo] = useState({
-    name: 'Prestige Jewelry Store',
-    email: 'contact@prestigejewelry.com',
-    phone: '+1 (555) 123-4567',
-    address: '123 Main Street, Downtown, NY 10001',
-    website: 'www.prestigejewelry.com',
-    description: 'Premium jewelry store offering fine diamonds, gold, and luxury accessories.'
+    name: '',
+    email: '',
+    phone: '',
+    address: '',
+    website: '',
+    description: ''
   });
+
+  // Stores modal state
+  const [isAddStoreOpen, setIsAddStoreOpen] = useState(false);
 
   // Fetch data on component mount
   useEffect(() => {
     fetchData();
+
+    // Realtime subscriptions for live updates
+    const channel = supabase.channel('business-admin-settings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => {
+        fetchTeamMembersOnly();
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stores' }, () => {
+        fetchStoresOnly();
+      })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'business_settings' }, () => {
+        fetchBusinessSettingsOnly();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   const fetchData = async () => {
@@ -175,15 +199,11 @@ export default function SettingsPage() {
       setLoading(true);
       setError(null);
       
-      // Fetch team members
-      const teamMembersData = await apiService.getTeamMembers();
-      setTeamMembers(teamMembersData);
-      
-      // Fetch stores
-      const storesResponse = await apiService.getStores();
-      if (storesResponse.success) {
-        setStores(storesResponse.data);
-      }
+      await Promise.all([
+        fetchBusinessSettingsOnly(),
+        fetchTeamMembersOnly(),
+        fetchStoresOnly(),
+      ]);
       
       // For now, use mock integrations since we don't have a real integrations API
       setIntegrations([
@@ -216,6 +236,53 @@ export default function SettingsPage() {
       toast.error('Failed to load settings data');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const toNumberFloor = (value: string | number | undefined): number => {
+    if (typeof value === 'number') return value;
+    const parsed = parseInt(String(value || '').replace(/[^0-9]/g, ''), 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 1;
+  };
+
+  const fetchBusinessSettingsOnly = async () => {
+    try {
+      const result = await apiService.getBusinessSettings();
+      if (result.success && result.data) {
+        const s = result.data as any;
+        setBusinessInfo({
+          name: s.name || '',
+          email: s.email || '',
+          phone: s.phone || '',
+          address: s.address || '',
+          website: s.website || '',
+          description: s.description || '',
+        });
+      }
+    } catch (e) {
+      // ignore
+    }
+  };
+
+  const fetchTeamMembersOnly = async () => {
+    try {
+      const teamMembersData = await apiService.getTeamMembers();
+      setTeamMembers(Array.isArray(teamMembersData) ? teamMembersData : []);
+    } catch (e) {
+      setTeamMembers([]);
+    }
+  };
+
+  const fetchStoresOnly = async () => {
+    try {
+      const storesResponse = await apiService.getStores();
+      if (storesResponse.success) {
+        setStores(storesResponse.data);
+      } else {
+        setStores([]);
+      }
+    } catch (e) {
+      setStores([]);
     }
   };
 
@@ -276,7 +343,7 @@ export default function SettingsPage() {
       email: member.email,
       role: member.role,
       phone: member.phone || '',
-      floor: member.floor || 1
+      floor: toNumberFloor(member.floor)
     });
     setShowEditModal(true);
   };
@@ -391,9 +458,28 @@ export default function SettingsPage() {
     <div className="flex flex-col gap-8">
       <div className="flex justify-between items-center">
         <h1 className="text-2xl font-semibold text-text-primary">Business Settings</h1>
-        <Button className="flex items-center gap-2">
+        <Button className="flex items-center gap-2" onClick={async () => {
+          try {
+            setSavingGeneral(true);
+            const resp = await apiService.upsertBusinessSettings({
+              name: businessInfo.name,
+              email: businessInfo.email,
+              phone: businessInfo.phone,
+              address: businessInfo.address,
+              website: businessInfo.website,
+              description: businessInfo.description,
+            });
+            if (resp.success) {
+              toast.success('Business settings saved');
+            }
+          } catch (e) {
+            toast.error('Failed to save business settings');
+          } finally {
+            setSavingGeneral(false);
+          }
+        }} disabled={savingGeneral}>
           <Save className="h-4 w-4" />
-          Save Changes
+          {savingGeneral ? 'Saving...' : 'Save Changes'}
         </Button>
       </div>
 
@@ -515,14 +601,12 @@ export default function SettingsPage() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Currency</Label>
-                  <Select defaultValue="usd">
+                  <Select value="inr" disabled>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="INR (₹)" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="usd">USD ($)</SelectItem>
-                      <SelectItem value="eur">EUR (€)</SelectItem>
-                      <SelectItem value="gbp">GBP (£)</SelectItem>
+                      <SelectItem value="inr">INR (₹)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -651,7 +735,7 @@ export default function SettingsPage() {
                   <Building2 className="h-5 w-5" />
                   Store Locations
                 </CardTitle>
-                <Button size="sm">
+                <Button size="sm" onClick={() => setIsAddStoreOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Store
                 </Button>
@@ -685,9 +769,9 @@ export default function SettingsPage() {
                         <TableCell>
                           <div className="max-w-xs truncate">{store.address}</div>
                         </TableCell>
-                        <TableCell>{store.phone}</TableCell>
-                        <TableCell>{store.manager}</TableCell>
-                        <TableCell>{getStatusBadge(store.status)}</TableCell>
+                        <TableCell>{(store as any).phone || '-'}</TableCell>
+                        <TableCell>{(store as any).manager_name || (store as any).manager || '-'}</TableCell>
+                        <TableCell>{getStatusBadge((store as any).is_active ? 'active' : 'inactive')}</TableCell>
                         <TableCell className="text-right">
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -889,6 +973,15 @@ export default function SettingsPage() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      <AddStoreModal
+        isOpen={isAddStoreOpen}
+        onClose={() => setIsAddStoreOpen(false)}
+        onSuccess={() => {
+          setIsAddStoreOpen(false);
+          fetchStoresOnly();
+        }}
+      />
 
       {/* Add Member Modal */}
       <Dialog open={showAddModal} onOpenChange={setShowAddModal}>

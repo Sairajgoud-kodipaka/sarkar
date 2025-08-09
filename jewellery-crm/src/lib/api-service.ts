@@ -790,20 +790,21 @@ class ApiService {
 
     if (error) throw new Error(error.message);
     
-    // Insert into team_members table
-    const { data: teamMemberData, error: teamMemberError } = await supabase
-      .from('team_members')
-      .insert({
-        email: memberData.email,
-        first_name: memberData.first_name,
-        last_name: memberData.last_name,
-        role: memberData.role,
-        floor: memberData.floor,
-        phone: memberData.phone,
-        status: 'active'
-      })
-      .select()
-      .single();
+         // Insert into team_members table with the auth user's UUID
+     const { data: teamMemberData, error: teamMemberError } = await supabase
+       .from('team_members')
+       .insert({
+         id: data.user?.id, // Use the UUID from the auth user
+         email: memberData.email,
+         first_name: memberData.first_name,
+         last_name: memberData.last_name,
+         role: memberData.role,
+         floor: memberData.floor,
+         phone: memberData.phone,
+         status: 'active'
+       })
+       .select()
+       .single();
 
     if (teamMemberError) {
       console.error('Error inserting team member:', teamMemberError);
@@ -829,15 +830,7 @@ class ApiService {
     return this.handleSupabaseResponse(user);
   }
 
-  async updateTeamMember(id: string, memberData: {
-    first_name?: string;
-    last_name?: string;
-    email?: string;
-    role?: string;
-    phone?: string;
-    floor?: number;
-    status?: 'active' | 'inactive' | 'on_leave';
-  }): Promise<ApiResponse<any>> {
+  async updateTeamMember(id: string, memberData: any): Promise<ApiResponse<any>> {
     try {
       const { data, error } = await supabase
         .from('team_members')
@@ -1143,9 +1136,35 @@ class ApiService {
         status: customerData.status || 'lead',
       };
 
-      // Remove undefined/empty-string keys to avoid DB errors
+      // Whitelist columns that may exist in the customers table (base + optional extended)
+      const allowedColumns = new Set([
+        'name','phone','interest','floor','visited_date','assigned_to','notes','status',
+        // optional extended profile fields (safe if missing; Supabase ignores extras only if omitted)
+        'email','address','city','state','country','date_of_birth','anniversary_date','community',
+        'lead_source','reason_for_visit','age_of_end_user','saving_scheme','catchment_area','next_follow_up','summary_notes',
+        'preferred_metal','preferred_style','preferred_occasion','budget'
+      ]);
+
+      // Date fields that should be converted from empty strings to null
+      const dateFields = ['date_of_birth', 'anniversary_date', 'visited_date', 'next_follow_up'];
+      
+      // Remove undefined/empty-string keys and any non-whitelisted fields
+      // Convert empty strings to null for date fields
       const finalData = Object.fromEntries(
-        Object.entries(payload).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+        Object.entries(payload)
+          .filter(([k, v]) => allowedColumns.has(k) && v !== undefined && v !== null)
+          .map(([k, v]) => {
+            // Convert empty strings to null for date fields
+            if (dateFields.includes(k) && v === '') {
+              return [k, null];
+            }
+            // Filter out empty strings for non-date fields
+            if (v === '' && !dateFields.includes(k)) {
+              return null;
+            }
+            return [k, v];
+          })
+          .filter(entry => entry !== null)
       );
 
       let { data, error } = await supabase
@@ -1155,7 +1174,7 @@ class ApiService {
         .single();
 
       // If insert fails due to unknown columns (extended fields not yet added), retry with a minimal payload
-      if (error && /column .* does not exist|unknown column|invalid input/i.test(error.message)) {
+      if (error && /(column .* does not exist|unknown column|invalid input|could not find the .* column)/i.test(error.message)) {
         console.warn('Create customer failed due to unknown columns. Retrying with minimal schema.', error.message);
         const minimalData = {
           name: finalData.name,
@@ -1177,6 +1196,23 @@ class ApiService {
       }
 
       if (error) throw new Error(error.message);
+
+      // Automatically create a visit record for dashboard statistics
+      try {
+        await supabase
+          .from('visits')
+          .insert({
+            customer_id: data.id,
+            customer_name: data.name,
+            floor: data.floor,
+            date: data.visited_date,
+            interest: data.interest || 'General Interest'
+          });
+      } catch (visitError) {
+        console.warn('Failed to create visit record:', visitError);
+        // Don't throw - customer was created successfully
+      }
+
       return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error creating customer:', error);
@@ -1186,10 +1222,35 @@ class ApiService {
 
   async updateCustomer(id: number, customerData: Partial<Client>): Promise<ApiResponse<any>> {
     try {
-      // Drop undefined/empty values, keep explicit empty strings for fields user wants cleared
+      // Whitelist columns to prevent unknown-column errors
+      const allowedColumns = new Set([
+        'name','phone','interest','floor','visited_date','assigned_to','notes','status',
+        'email','address','city','state','country','date_of_birth','anniversary_date','community',
+        'lead_source','reason_for_visit','age_of_end_user','saving_scheme','catchment_area','next_follow_up','summary_notes',
+        'preferred_metal','preferred_style','preferred_occasion','budget'
+      ]);
+
+      const base = { ...customerData, updated_at: new Date().toISOString() } as Record<string, any>;
+      
+      // Date fields that should be converted from empty strings to null
+      const dateFields = ['date_of_birth', 'anniversary_date', 'visited_date', 'next_follow_up'];
+      
+      // Clean the data: convert empty strings to null for date fields, remove undefined/null values
       const finalData = Object.fromEntries(
-        Object.entries({ ...customerData, updated_at: new Date().toISOString() })
-          .filter(([_, v]) => v !== undefined && v !== null)
+        Object.entries(base)
+          .filter(([k, v]) => allowedColumns.has(k) && v !== undefined)
+          .map(([k, v]) => {
+            // Convert empty strings to null for date fields
+            if (dateFields.includes(k) && v === '') {
+              return [k, null];
+            }
+            // Remove null values (but keep the converted nulls for date fields)
+            if (v === null && !dateFields.includes(k)) {
+              return null;
+            }
+            return [k, v];
+          })
+          .filter(entry => entry !== null)
       );
 
       const { data, error } = await supabase
@@ -1385,6 +1446,27 @@ class ApiService {
         .single();
 
       if (error) throw new Error(error.message);
+
+      // Automatically create a sales record for dashboard statistics (only for confirmed/processing/shipped/delivered orders)
+      const salesEligibleStatuses = ['confirmed', 'processing', 'shipped', 'delivered'];
+      if (salesEligibleStatuses.includes(data.status)) {
+        try {
+          await supabase
+            .from('sales')
+            .insert({
+              customer_id: data.customer_id,
+              customer_name: data.customer_name,
+              amount: data.total_amount,
+              date: new Date().toISOString().split('T')[0], // today
+              floor: data.floor,
+              created_by: data.created_by
+            });
+        } catch (salesError) {
+          console.warn('Failed to create sales record:', salesError);
+          // Don't throw - order was created successfully
+        }
+      }
+
       return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error creating order:', error);
@@ -1410,6 +1492,39 @@ class ApiService {
         .single();
 
       if (error) throw new Error(error.message);
+
+      // If order status changed to confirmed/processing/shipped/delivered, create sales record
+      const salesEligibleStatuses = ['confirmed', 'processing', 'shipped', 'delivered'];
+      if (updates.status && salesEligibleStatuses.includes(updates.status)) {
+        try {
+          // Check if sales record already exists for this order
+          const { data: existingSale } = await supabase
+            .from('sales')
+            .select('id')
+            .eq('customer_name', data.customer_name)
+            .eq('amount', data.total_amount)
+            .eq('floor', data.floor)
+            .single();
+
+          // Only create if no existing sales record found
+          if (!existingSale) {
+            await supabase
+              .from('sales')
+              .insert({
+                customer_id: data.customer_id,
+                customer_name: data.customer_name,
+                amount: data.total_amount,
+                date: new Date().toISOString().split('T')[0], // today
+                floor: data.floor,
+                created_by: data.created_by
+              });
+          }
+        } catch (salesError) {
+          console.warn('Failed to create sales record on status update:', salesError);
+          // Don't throw - order was updated successfully
+        }
+      }
+
       return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error updating order:', error);
@@ -1464,17 +1579,24 @@ class ApiService {
     appointment_date: string; // ISO datetime
     duration_minutes?: number;
     floor: number;
-    assigned_to?: string; // UUID
+    assigned_to?: string | null; // UUID
     status?: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
     notes?: string;
   }): Promise<ApiResponse<any>> {
     try {
+      const cleanData = { ...appointmentData };
+      
+      // Convert empty string to null for UUID fields
+      if (cleanData.assigned_to === '') {
+        cleanData.assigned_to = null;
+      }
+      
       const { data, error } = await supabase
         .from('appointments')
         .insert({
-          ...appointmentData,
-          duration_minutes: appointmentData.duration_minutes ?? 60,
-          status: appointmentData.status ?? 'scheduled',
+          ...cleanData,
+          duration_minutes: cleanData.duration_minutes ?? 60,
+          status: cleanData.status ?? 'scheduled',
         })
         .select()
         .single();
@@ -1491,15 +1613,33 @@ class ApiService {
     appointment_date: string;
     duration_minutes: number;
     floor: number;
-    assigned_to: string;
+    assigned_to: string | null;
     status: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show';
     notes: string;
+    customer_name?: string;
+    customer_phone?: string;
+    customer_email?: string;
   }>): Promise<ApiResponse<any>> {
     try {
+      // Clean up the updates object to handle UUID fields properly
+      const cleanUpdates = { ...updates };
+      
+      // Convert empty string to null for UUID fields
+      if (cleanUpdates.assigned_to === '') {
+        cleanUpdates.assigned_to = null as any;
+      }
+      
+      // Remove undefined values
+      Object.keys(cleanUpdates).forEach(key => {
+        if (cleanUpdates[key as keyof typeof cleanUpdates] === undefined) {
+          delete cleanUpdates[key as keyof typeof cleanUpdates];
+        }
+      });
+
       const { data, error } = await supabase
         .from('appointments')
         .update({
-          ...updates,
+          ...cleanUpdates,
           updated_at: new Date().toISOString(),
         })
         .eq('id', id)
@@ -1510,6 +1650,41 @@ class ApiService {
       return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error updating appointment:', error);
+      throw error;
+    }
+  }
+
+  async deleteAppointment(id: number): Promise<ApiResponse<void>> {
+    try {
+      const { error } = await supabase
+        .from('appointments')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(undefined);
+    } catch (error) {
+      console.error('Error deleting appointment:', error);
+      throw error;
+    }
+  }
+
+  async updateAppointmentStatus(id: number, status: string): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('appointments')
+        .update({ 
+          status,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(data);
+    } catch (error) {
+      console.error('Error updating appointment status:', error);
       throw error;
     }
   }
@@ -2188,19 +2363,34 @@ class ApiService {
 
   async createSupportTicket(ticketData: any): Promise<ApiResponse<any>> {
     try {
+      // Whitelist fields that actually exist on support_tickets
+      const payload: any = {
+        title: ticketData.title || 'Untitled Support Request',
+        description: ticketData.description || 'No description provided',
+        status: ticketData.status || 'open',
+        priority: ticketData.priority || 'medium',
+        customer_id: ticketData.customer_id,
+        assigned_to: ticketData.assigned_to,
+        created_by: ticketData.created_by,
+        floor: ticketData.floor,
+      };
+
+      // Remove undefined/null values (but keep empty strings for required fields)
+      const finalData = Object.fromEntries(
+        Object.entries(payload).filter(([key, value]) => {
+          // Keep required fields even if they're empty strings
+          const requiredFields = ['title', 'description'];
+          if (requiredFields.includes(key)) {
+            return value !== undefined && value !== null;
+          }
+          // For other fields, filter out undefined, null, and empty strings
+          return value !== undefined && value !== null && value !== '';
+        })
+      );
+
       const { data, error } = await supabase
         .from('support_tickets')
-        .insert({
-        title: ticketData.title,
-        description: ticketData.description,
-          status: ticketData.status || 'open',
-        priority: ticketData.priority || 'medium',
-        category: ticketData.category || 'general',
-          customer_id: ticketData.customer_id,
-          assigned_to: ticketData.assigned_to,
-          created_by: ticketData.created_by,
-          floor: ticketData.floor
-        })
+        .insert(finalData)
         .select()
         .single();
 
@@ -2741,57 +2931,156 @@ class ApiService {
   // Store Methods
   async getStores(): Promise<ApiResponse<any[]>> {
     try {
-      // Mock stores data
-      const mockStores = [
-        {
-          id: 1,
-          name: 'Main Store',
-          address: '123 Main Street',
-          phone: '+1234567890',
-          manager_id: 1,
-          status: 'active',
-          created_at: new Date().toISOString()
-        }
-      ];
+      const { data, error } = await supabase
+        .from('stores')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      return this.handleSupabaseResponse(mockStores);
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(data || []);
     } catch (error) {
       console.error('Error fetching stores:', error);
       throw new Error('Failed to fetch stores');
     }
   }
 
-  async createStore(storeData: any): Promise<ApiResponse<any>> {
+  async createStore(storeData: {
+    name: string;
+    code: string;
+    address: string;
+    city: string;
+    state: string;
+    manager?: string; // team_members UUID
+    is_active: boolean;
+  }): Promise<ApiResponse<any>> {
     try {
-      const newStore = {
-        id: Date.now(),
+      const payload: Record<string, any> = {
         name: storeData.name,
+        code: storeData.code,
         address: storeData.address,
-        phone: storeData.phone,
-        manager_id: storeData.manager_id,
-        status: 'active',
-        created_at: new Date().toISOString()
+        city: storeData.city,
+        state: storeData.state,
+        is_active: storeData.is_active,
       };
 
-      return this.handleSupabaseResponse(newStore);
+      if (storeData.manager) {
+        payload.manager = storeData.manager;
+      }
+
+      const { data, error } = await supabase
+        .from('stores')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error creating store:', error);
       throw new Error('Failed to create store');
     }
   }
 
-  async updateStore(storeId: string, storeData: any): Promise<ApiResponse<any>> {
+  async updateStore(storeId: string, storeData: Partial<{
+    name: string;
+    code: string;
+    address: string;
+    city: string;
+    state: string;
+    timezone: string;
+    manager: string; // team_members UUID
+    is_active: boolean;
+  }>): Promise<ApiResponse<any>> {
     try {
-      const updatedStore = {
-        id: parseInt(storeId),
-        ...storeData,
-        updated_at: new Date().toISOString()
-      };
+      const cleanUpdates: Record<string, any> = Object.fromEntries(
+        Object.entries(storeData).filter(([_, v]) => v !== undefined && v !== null && v !== '')
+      );
 
-      return this.handleSupabaseResponse(updatedStore);
+      const { data, error } = await supabase
+        .from('stores')
+        .update({
+          ...cleanUpdates,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', parseInt(storeId))
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error updating store:', error);
       throw new Error('Failed to update store');
+    }
+  }
+
+  // Business Settings Methods
+  async getBusinessSettings(): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('business_settings')
+        .select('*')
+        .limit(1)
+        .single();
+
+      if (error && error.message && !/No rows/.test(error.message)) {
+        throw new Error(error.message);
+      }
+
+      return this.handleSupabaseResponse(data || null);
+    } catch (error) {
+      console.error('Error fetching business settings:', error);
+      throw new Error('Failed to fetch business settings');
+    }
+  }
+
+  async upsertBusinessSettings(settings: {
+    name?: string;
+    email?: string;
+    phone?: string;
+    address?: string;
+    website?: string;
+    description?: string;
+    currency?: string;
+    tax_rate?: number;
+    business_hours?: any;
+    payment_methods?: any;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const clean = Object.fromEntries(
+        Object.entries(settings).filter(([_, v]) => v !== undefined)
+      );
+
+      // If a row exists, update it; else insert
+      const { data: existing } = await supabase
+        .from('business_settings')
+        .select('id')
+        .limit(1)
+        .single();
+
+      if (existing?.id) {
+        const { data, error } = await supabase
+          .from('business_settings')
+          .update({ ...clean, updated_at: new Date().toISOString() })
+          .eq('id', existing.id)
+          .select()
+          .single();
+
+        if (error) throw new Error(error.message);
+        return this.handleSupabaseResponse(data);
+      }
+
+      const { data, error } = await supabase
+        .from('business_settings')
+        .insert(clean)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(data);
+    } catch (error) {
+      console.error('Error saving business settings:', error);
+      throw new Error('Failed to save business settings');
     }
   }
 

@@ -12,7 +12,9 @@ import { Bell, Plus, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface AddAnnouncementModalProps {
-  onSuccess?: () => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onSuccess?: (data: any) => void;
 }
 
 interface AnnouncementFormData {
@@ -27,8 +29,7 @@ interface AnnouncementFormData {
   expires_at?: string;
 }
 
-export default function AddAnnouncementModal({ onSuccess }: AddAnnouncementModalProps) {
-  const [open, setOpen] = useState(false);
+export default function AddAnnouncementModal({ isOpen, onClose, onSuccess }: AddAnnouncementModalProps) {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState<AnnouncementFormData>({
     title: '',
@@ -60,7 +61,7 @@ export default function AddAnnouncementModal({ onSuccess }: AddAnnouncementModal
 
       if (response.success) {
         toast.success('Announcement created successfully!');
-        setOpen(false);
+        onClose();
         setFormData({
           title: '',
           content: '',
@@ -101,13 +102,7 @@ export default function AddAnnouncementModal({ onSuccess }: AddAnnouncementModal
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button className="flex items-center gap-2">
-          <Plus className="w-4 h-4" />
-          Add Announcement
-        </Button>
-      </DialogTrigger>
+    <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
@@ -253,7 +248,7 @@ export default function AddAnnouncementModal({ onSuccess }: AddAnnouncementModal
             <Button
               type="button"
               variant="outline"
-              onClick={() => setOpen(false)}
+              onClick={onClose}
               disabled={loading}
             >
               Cancel

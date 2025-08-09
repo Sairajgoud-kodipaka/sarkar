@@ -47,17 +47,22 @@ export default function SalesAppointmentsPage() {
       
       if (response.success && response.data) {
         // Transform API data to match component interface
-        const transformedAppointments: Appointment[] = response.data.map((apt: any) => ({
-          id: apt.id,
-          customer_name: apt.customer_name,
-          customer_phone: apt.customer_phone,
-          date: apt.appointment_date,
-          time: new Date(apt.appointment_date).toLocaleTimeString(),
-          duration: apt.duration_minutes || 60,
-          status: apt.status,
-          service_type: 'Consultation', // Default value
-          notes: apt.notes || ''
-        }));
+        const transformedAppointments: Appointment[] = response.data.map((apt: any) => {
+          const appointmentDateTime = new Date(apt.appointment_date);
+          return {
+            id: apt.id,
+            title: `Appointment with ${apt.customer_name}`,
+            customer_name: apt.customer_name || 'Unknown Customer',
+            date: appointmentDateTime.toISOString().split('T')[0], // YYYY-MM-DD format
+            time: appointmentDateTime.toTimeString().slice(0, 5), // HH:MM format
+            duration: apt.duration_minutes || 60,
+            type: 'consultation' as const, // Default type
+            status: apt.status || 'scheduled',
+            location: `Floor ${apt.floor || 1}`,
+            notes: apt.notes || '',
+            created_at: apt.created_at || new Date().toISOString()
+          };
+        });
         
         setAppointments(transformedAppointments);
       } else {
@@ -309,7 +314,7 @@ export default function SalesAppointmentsPage() {
                       <Badge className={getStatusColor(appointment.status)}>
                         <div className="flex items-center space-x-1">
                           {getStatusIcon(appointment.status)}
-                          <span>{appointment.status.replace('_', ' ')}</span>
+                          <span>{(appointment.status || 'scheduled').replace('_', ' ')}</span>
                         </div>
                       </Badge>
                     </div>

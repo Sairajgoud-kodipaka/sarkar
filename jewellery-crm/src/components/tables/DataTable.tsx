@@ -54,6 +54,12 @@ export interface DataTableProps<T> {
   actions?: React.ReactNode;
   emptyState?: React.ReactNode;
   className?: string;
+  onFilter?: () => void;
+  onExport?: (rows: T[], columns: Column<T>[]) => void;
+  exportFilename?: string;
+  onViewRow?: (row: T) => void;
+  onEditRow?: (row: T) => void;
+  onDeleteRow?: (row: T) => void;
 }
 
 /**
@@ -72,6 +78,12 @@ export function DataTable<T extends Record<string, unknown>>({
   actions,
   emptyState,
   className,
+  onFilter,
+  onExport,
+  exportFilename,
+  onViewRow,
+  onEditRow,
+  onDeleteRow,
 }: DataTableProps<T>) {
   const [searchQuery, setSearchQuery] = useState('');
   const [sortConfig, setSortConfig] = useState<{
@@ -174,6 +186,54 @@ export function DataTable<T extends Record<string, unknown>>({
   };
 
   /**
+   * Export current rows as CSV
+   */
+  const handleExport = () => {
+    const rows = sortedData;
+    if (onExport) {
+      onExport(rows as T[], columns);
+      return;
+    }
+
+    const headers = columns.map(c => c.title);
+    const escape = (val: unknown) => {
+      if (val === null || val === undefined) return '';
+      const str = typeof val === 'object' ? JSON.stringify(val) : String(val);
+      if (str.includes(',') || str.includes('"') || str.includes('\n')) {
+        return '"' + str.replace(/"/g, '""') + '"';
+      }
+      return str;
+    };
+
+    const csvLines = [headers.join(',')];
+    for (const row of rows as any[]) {
+      const line = columns.map(col => escape((row as any)[col.key]));
+      csvLines.push(line.join(','));
+    }
+    const blob = new Blob([csvLines.join('\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', exportFilename || 'export.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
+  /**
+   * Default filter behavior: scroll to element with id "filters" if present
+   */
+  const handleFilter = () => {
+    if (onFilter) {
+      onFilter();
+      return;
+    }
+    const el = document.getElementById('filters');
+    if (el) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
+
+  /**
    * Render cell content
    */
   const renderCell = (column: Column<T>, row: T) => {
@@ -230,12 +290,12 @@ export function DataTable<T extends Record<string, unknown>>({
               </Badge>
             )}
             
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleFilter}>
               <Filter className="h-4 w-4 mr-2" />
               Filter
             </Button>
             
-            <Button variant="outline" size="sm">
+            <Button variant="outline" size="sm" onClick={handleExport}>
               <Download className="h-4 w-4 mr-2" />
               Export
             </Button>
@@ -336,9 +396,29 @@ export function DataTable<T extends Record<string, unknown>>({
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>View Details</DropdownMenuItem>
-                        <DropdownMenuItem>Edit</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onViewRow?.(row as T);
+                          }}
+                        >
+                          View Details
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onEditRow?.(row as T);
+                          }}
+                        >
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteRow?.(row as T);
+                          }}
+                        >
                           Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>

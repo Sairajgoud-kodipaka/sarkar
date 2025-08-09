@@ -138,7 +138,7 @@ export default function FunctionalAppointmentsPage() {
         customer_email: formData.customer_email,
         appointment_date: appointmentDateTime.toISOString(),
         duration_minutes: formData.duration,
-        assigned_to: formData.assigned_to === 'unassigned' ? null : (formData.assigned_to || user?.id),
+        assigned_to: formData.assigned_to || user?.id,
         floor: formData.floor,
         status: 'scheduled',
         notes: formData.notes
@@ -170,7 +170,7 @@ export default function FunctionalAppointmentsPage() {
         customer_email: formData.customer_email,
         appointment_date: appointmentDateTime.toISOString(),
         duration_minutes: formData.duration,
-        assigned_to: formData.assigned_to === 'unassigned' ? null : formData.assigned_to,
+        assigned_to: formData.assigned_to,
         floor: formData.floor,
         notes: formData.notes
       });
@@ -233,7 +233,7 @@ export default function FunctionalAppointmentsPage() {
       appointment_date: appointment.appointment_date,
       appointment_time: appointment.appointment_time,
       duration: appointment.duration,
-      assigned_to: appointment.assigned_to_id || 'unassigned',
+      assigned_to: appointment.assigned_to_id || '',
       floor: parseInt(appointment.floor),
       notes: appointment.notes
     });
@@ -308,15 +308,15 @@ export default function FunctionalAppointmentsPage() {
 
       {/* Search and Filters */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search appointments..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
+          <Input
+            placeholder="Search appointments..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
         
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger>
@@ -336,14 +336,14 @@ export default function FunctionalAppointmentsPage() {
         <div className="flex items-center gap-2">
           <Users className="w-4 h-4 text-gray-500" />
           <span className="text-sm text-gray-600">{filteredAppointments.length} appointments</span>
-            </div>
-          </div>
+        </div>
+      </div>
 
       {/* Appointments List */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {filteredAppointments.length === 0 ? (
           <div className="col-span-full">
-      <Card>
+            <Card>
               <CardContent className="text-center py-8">
                 <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
                 <p className="text-gray-500">No appointments found</p>
@@ -356,13 +356,13 @@ export default function FunctionalAppointmentsPage() {
                 </Button>
               </CardContent>
             </Card>
-                    </div>
+          </div>
         ) : (
           filteredAppointments.map((appointment) => (
             <Card key={appointment.id} className="hover:shadow-md transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex justify-between items-start">
-                    <div>
+                  <div>
                     <CardTitle className="text-lg">{appointment.customer_name}</CardTitle>
                     <div className="flex items-center gap-4 mt-2 text-sm text-gray-600">
                       <div className="flex items-center gap-1">
@@ -410,7 +410,7 @@ export default function FunctionalAppointmentsPage() {
                   {appointment.notes && (
                     <div className="text-sm text-gray-600 bg-gray-50 p-2 rounded">
                       <strong>Notes:</strong> {appointment.notes}
-            </div>
+                    </div>
                   )}
 
                   {/* Action Buttons */}
@@ -491,11 +491,11 @@ export default function FunctionalAppointmentsPage() {
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           ))
         )}
       </div>
@@ -586,44 +586,23 @@ export default function FunctionalAppointmentsPage() {
                   <SelectItem value="3">Floor 3</SelectItem>
                 </SelectContent>
               </Select>
-                    </div>
+            </div>
             
             <div className="space-y-2 col-span-2">
               <Label htmlFor="assigned_to">Assign To</Label>
               <Select value={formData.assigned_to} onValueChange={(value) => setFormData({...formData, assigned_to: value})}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select salesperson" />
+                  <SelectValue placeholder="Select team member" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unassigned">
-                    Leave Unassigned
-                  </SelectItem>
-                  {teamMembers
-                    .filter(member => 
-                      member.role === 'sales_associate' || 
-                      member.role === 'inhouse_sales' ||
-                      member.role === 'floor_manager'
-                    )
-                    .length === 0 ? (
-                      <SelectItem value="no-members" disabled>
-                        No sales team members found
-                      </SelectItem>
-                    ) : (
-                      teamMembers
-                        .filter(member => 
-                          member.role === 'sales_associate' || 
-                          member.role === 'inhouse_sales' ||
-                          member.role === 'floor_manager'
-                        )
-                        .map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.first_name} {member.last_name} ({member.role.replace('_', ' ')})
-                          </SelectItem>
-                        ))
-                    )}
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.first_name} {member.last_name} ({member.role})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
-                      </div>
+            </div>
             
             <div className="space-y-2 col-span-2">
               <Label htmlFor="notes">Notes</Label>
@@ -634,9 +613,9 @@ export default function FunctionalAppointmentsPage() {
                 placeholder="Enter any additional notes"
                 rows={3}
               />
-                    </div>
-                  </div>
-                  
+            </div>
+          </div>
+
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowAddModal(false)}>
               Cancel
@@ -734,41 +713,20 @@ export default function FunctionalAppointmentsPage() {
                   <SelectItem value="3">Floor 3</SelectItem>
                 </SelectContent>
               </Select>
-                      </div>
+            </div>
             
             <div className="space-y-2 col-span-2">
               <Label htmlFor="edit_assigned_to">Assign To</Label>
               <Select value={formData.assigned_to} onValueChange={(value) => setFormData({...formData, assigned_to: value})}>
                 <SelectTrigger>
-                  <SelectValue placeholder="Select salesperson" />
+                  <SelectValue placeholder="Select team member" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="unassigned">
-                    Leave Unassigned
-                  </SelectItem>
-                  {teamMembers
-                    .filter(member => 
-                      member.role === 'sales_associate' || 
-                      member.role === 'inhouse_sales' ||
-                      member.role === 'floor_manager'
-                    )
-                    .length === 0 ? (
-                      <SelectItem value="no-members" disabled>
-                        No sales team members found
-                      </SelectItem>
-                    ) : (
-                      teamMembers
-                        .filter(member => 
-                          member.role === 'sales_associate' || 
-                          member.role === 'inhouse_sales' ||
-                          member.role === 'floor_manager'
-                        )
-                        .map((member) => (
-                          <SelectItem key={member.id} value={member.id}>
-                            {member.first_name} {member.last_name} ({member.role.replace('_', ' ')})
-                          </SelectItem>
-                        ))
-                    )}
+                  {teamMembers.map((member) => (
+                    <SelectItem key={member.id} value={member.id}>
+                      {member.first_name} {member.last_name} ({member.role})
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>
@@ -788,10 +746,10 @@ export default function FunctionalAppointmentsPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditModal(false)}>
               Cancel
-                      </Button>
+            </Button>
             <Button onClick={handleUpdateAppointment}>
               Update Appointment
-                      </Button>
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -816,10 +774,10 @@ export default function FunctionalAppointmentsPage() {
                     <Badge className={getStatusColor(selectedAppointment.status)}>
                       {selectedAppointment.status.replace('_', ' ').toUpperCase()}
                     </Badge>
-                    </div>
                   </div>
                 </div>
-                
+              </div>
+              
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Phone</Label>
@@ -861,9 +819,9 @@ export default function FunctionalAppointmentsPage() {
                 <div>
                   <Label className="text-sm font-medium text-gray-500">Notes</Label>
                   <p className="mt-1 p-3 bg-gray-50 rounded-lg">{selectedAppointment.notes}</p>
-                  </div>
-                )}
-              </div>
+                </div>
+              )}
+            </div>
           )}
 
           <DialogFooter>

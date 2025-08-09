@@ -54,7 +54,7 @@ export interface Tenant {
  * Tenant-specific configuration settings
  */
 export interface TenantSettings {
-  currency: 'INR' | 'USD';
+  currency: 'INR';
   timezone: string;
   dateFormat: string;
   businessHours: BusinessHours;

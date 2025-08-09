@@ -21,6 +21,7 @@ import ProductActionsModal from '@/components/products/ProductActionsModal';
 import ScopeIndicator from '@/components/ui/ScopeIndicator';
 import { useScopedVisibility } from '@/lib/scoped-visibility';
 import { getProductImageUrl, getProductEmoji } from '@/lib/utils';
+import { DataTable, Column } from '@/components/tables/DataTable';
 
 interface Product {
   id: number;
@@ -92,6 +93,7 @@ export default function ProductsPage() {
   const [imageModalOpen, setImageModalOpen] = useState(false);
   const [globalCatalogue, setGlobalCatalogue] = useState<any>(null);
   const [showGlobalCatalogue, setShowGlobalCatalogue] = useState(false);
+  const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   
   // Get user scope for scoped visibility
   const { userScope, canAccessAllData, canAccessStoreData } = useScopedVisibility();
@@ -292,6 +294,24 @@ export default function ProductsPage() {
           </p>
         </div>
         <div className="flex gap-2">
+          <div className="flex items-center rounded border border-border overflow-hidden">
+            <Button
+              variant={viewMode === 'table' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('table')}
+              className="rounded-none"
+              size="sm"
+            >
+              Table View
+            </Button>
+            <Button
+              variant={viewMode === 'grid' ? 'default' : 'ghost'}
+              onClick={() => setViewMode('grid')}
+              className="rounded-none border-l border-border"
+              size="sm"
+            >
+              Grid View
+            </Button>
+          </div>
           <Button 
             variant="outline" 
             onClick={() => {
@@ -437,7 +457,7 @@ export default function ProductsPage() {
         </CardContent>
       </Card>
 
-      {/* Products Grid */}
+      {/* Products Table or Grid */}
           {loading ? (
         <div className="flex justify-center items-center h-64">
           <div className="text-center">
@@ -445,6 +465,48 @@ export default function ProductsPage() {
             <p className="text-muted-foreground">Loading products...</p>
             </div>
             </div>
+          ) : (
+        <>
+          {viewMode === 'table' ? (
+            <DataTable<any>
+              data={products as any}
+              loading={false}
+              searchable={false}
+              columns={([
+                { key: 'name', title: 'Name', sortable: true, render: (_v, row) => (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl">{getProductEmoji(row as any)}</span>
+                    <div className="min-w-0">
+                      <div className="font-medium truncate" title={(row as any).name}>{(row as any).name}</div>
+                      <div className="text-xs text-muted-foreground">SKU: {(row as any).sku}</div>
+                    </div>
+                  </div>
+                ) },
+                { key: 'category', title: 'Category', sortable: true },
+                { key: 'price', title: 'Price', sortable: true, render: (v) => formatCurrency(Number(v || 0)) },
+                { key: 'quantity', title: 'Stock', sortable: true, render: (v, row) => (
+                  <div>
+                    <div className="font-medium">{(row as any).quantity ?? (row as any).stock_quantity ?? 0}</div>
+                    {(row as any).is_low_stock && <div className="text-xs text-yellow-600">Low stock</div>}
+                  </div>
+                ) },
+                { key: 'status', title: 'Status', sortable: true, render: (v) => (
+                  <Badge variant={getStatusBadgeVariant(String(v || 'active'))}>{String(v || 'active').replace('_',' ')}</Badge>
+                ) },
+                { key: 'created_at', title: 'Created', sortable: true, render: (v) => v ? formatDate(String(v)) : '—' },
+              ]) as Column<any>[]}
+              onRowClick={(row) => handleProductAction(row as any as Product, 'view')}
+              onFilter={() => {
+                const el = document.getElementById('filters');
+                if (el) el.scrollIntoView({ behavior: 'smooth' });
+              }}
+              onExport={undefined}
+              exportFilename={'products.csv'}
+              onViewRow={(row) => handleProductAction(row as any as Product, 'view')}
+              onEditRow={(row) => handleProductAction(row as any as Product, 'edit')}
+              onDeleteRow={(row) => handleProductAction(row as any as Product, 'delete')}
+              actions={null}
+            />
           ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {products.map((product) => (
@@ -591,6 +653,8 @@ export default function ProductsPage() {
             </Card>
           ))}
             </div>
+          )}
+        </>
           )}
 
       {!loading && products.length === 0 && (

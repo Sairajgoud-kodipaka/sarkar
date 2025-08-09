@@ -20,12 +20,12 @@ interface StoreFormData {
   address: string;
   city: string;
   state: string;
-  manager?: number;
+  manager?: string; // UUID from team_members
   is_active: boolean;
 }
 
-interface User {
-  id: number;
+interface UserOption {
+  id: string; // UUID
   first_name: string;
   last_name: string;
   email: string;
@@ -44,7 +44,7 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [teamMembers, setTeamMembers] = useState<User[]>([]);
+  const [teamMembers, setTeamMembers] = useState<UserOption[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
 
   useEffect(() => {
@@ -57,19 +57,16 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
     try {
       setLoadingMembers(true);
       const response = await apiService.getTeamMembers();
-      if (response.success) {
-        // Ensure response.data is an array
-        const data = response.data;
-        if (Array.isArray(data)) {
-          setTeamMembers(data);
-        } else {
-          console.error('Team members data is not an array:', data);
-          setTeamMembers([]);
-        }
-      } else {
-        console.error('Failed to fetch team members:', response.message);
-        setTeamMembers([]);
-      }
+      const data = Array.isArray(response) ? response : [];
+      // Map to the fields we need
+      const options: UserOption[] = data.map((m: any) => ({
+        id: m.id,
+        first_name: m.name?.split(' ')[0] || m.first_name || '',
+        last_name: m.name?.split(' ').slice(1).join(' ') || m.last_name || '',
+        email: m.email,
+        role: m.role,
+      }));
+      setTeamMembers(options);
     } catch (error) {
       console.error('Failed to fetch team members:', error);
       setTeamMembers([]);
@@ -84,7 +81,15 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
     setError(null);
 
     try {
-      const response = await apiService.createStore(formData);
+      const response = await apiService.createStore({
+        name: formData.name,
+        code: formData.code,
+        address: formData.address,
+        city: formData.city,
+        state: formData.state,
+        manager: formData.manager,
+        is_active: formData.is_active,
+      });
       if (response.success) {
         onSuccess();
         onClose();
@@ -195,8 +200,8 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
           <div className="space-y-2">
             <Label htmlFor="manager">Manager</Label>
             <Select
-              value={formData.manager?.toString() || 'none'}
-              onValueChange={(value) => handleInputChange('manager', value && value !== 'none' ? parseInt(value) : undefined)}
+              value={formData.manager || 'none'}
+              onValueChange={(value) => handleInputChange('manager', value && value !== 'none' ? value : undefined)}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select manager" />
@@ -214,7 +219,7 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
                   <>
                     <SelectItem value="none">No Manager</SelectItem>
                     {teamMembers.map((member) => (
-                      <SelectItem key={member.id} value={member.id.toString()}>
+                      <SelectItem key={member.id} value={member.id}>
                         {member.first_name} {member.last_name} ({member.role})
                       </SelectItem>
                     ))}

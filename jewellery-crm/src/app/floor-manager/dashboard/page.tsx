@@ -286,7 +286,6 @@ export default function FloorManagerDashboard() {
               <Select value={timeFilter} onValueChange={(value: 'day' | 'week' | 'month') => setTimeFilter(value)}>
                 <SelectTrigger className="w-32">
                   <SelectValue />
-                  <ChevronDown className="h-4 w-4" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="day">Day</SelectItem>
