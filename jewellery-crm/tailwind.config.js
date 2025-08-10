@@ -44,6 +44,29 @@ module.exports = {
         'chart-5': 'hsl(var(--chart-5))',
         // Gold color for jewellery theme
         'gold': 'hsl(var(--gold))',
+        // Enhanced dashboard colors following STYLING_GUIDE.md
+        'primary': {
+          50: '#FFF4F1',
+          100: '#FFE8E1',
+          500: '#FF7A59',
+          600: '#E85A3A',
+          700: '#C14A2F',
+        },
+        'navy': {
+          50: '#F0F4F8',
+          100: '#D9E2EC',
+          500: '#0091AE',
+          700: '#1B2A4E',
+          900: '#0F1419',
+        },
+        'success-green': '#00BDA5',
+        'warning-yellow': '#F5A623',
+        'error-red': '#E74C3C',
+        'info-blue': '#4A90E2',
+        'text-primary': '#33475B',
+        'text-secondary': '#5E6C84',
+        'text-muted': '#8B9BAB',
+        'border-light': '#E6EAED',
       },
       fontFamily: {
         sans: ['var(--font-lexend)', 'Lexend', 'Avenir Next', 'system-ui', 'sans-serif'],
@@ -52,6 +75,15 @@ module.exports = {
         lg: 'var(--radius)',
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
+      },
+      animation: {
+        'slide-in-from-top-2': 'slideInFromTop 0.2s ease-out',
+      },
+      keyframes: {
+        slideInFromTop: {
+          '0%': { opacity: '0', transform: 'translateY(-8px)' },
+          '100%': { opacity: '1', transform: 'translateY(0)' },
+        },
       },
     },
   },

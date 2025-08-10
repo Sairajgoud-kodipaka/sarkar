@@ -148,12 +148,12 @@ export function DashboardLayout({
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
           <div className="space-y-1">
             {title && (
-              <h1 className="text-3xl font-semibold tracking-tight text-foreground">
+              <h1 className="text-3xl font-semibold tracking-tight text-foreground select-none cursor-default">
                 {title}
               </h1>
             )}
             {subtitle && (
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground select-none cursor-default">
                 {subtitle}
               </p>
             )}

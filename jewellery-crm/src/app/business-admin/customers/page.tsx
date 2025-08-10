@@ -7,8 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Search, Download, Upload, Plus, Filter, MoreHorizontal, Eye, Edit, Trash2, UserPlus, Calendar, MessageSquare, Phone } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Search, Download, Upload, Plus, Filter, MoreHorizontal, Eye, Edit, Trash2, UserPlus } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 import { useAuth } from '@/hooks/useAuth';
 import AddCustomerModal from '@/components/customers/AddCustomerModal';
@@ -48,6 +48,7 @@ export default function CustomersPage() {
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [showViewModal, setShowViewModal] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -56,6 +57,7 @@ export default function CustomersPage() {
   const [customerToAssign, setCustomerToAssign] = useState<Customer | null>(null);
   const [teamMembers, setTeamMembers] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
   const [selectedAssignee, setSelectedAssignee] = useState<string>('');
+  const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
 
   // Check if user can delete customers (managers and higher roles)
   const canDeleteCustomers = (() => {
@@ -167,8 +169,8 @@ export default function CustomersPage() {
   };
 
   const handleViewCustomer = (customer: Customer) => {
-    // Navigate to customer detail page
-    window.location.href = `/business-admin/customers/${customer.id}`;
+    setSelectedCustomer(customer);
+    setShowViewModal(true);
   };
 
   const handleEditCustomer = (customer: Customer) => {
@@ -234,23 +236,7 @@ export default function CustomersPage() {
     }
   };
 
-  const handleScheduleAppointment = (customer: Customer) => {
-    // Navigate to appointment scheduling
-    window.location.href = `/business-admin/appointments/new?customer=${customer.id}`;
-  };
 
-  const handleSendMessage = (customer: Customer) => {
-    console.log('Send message to:', customer);
-    // TODO: Implement messaging functionality
-  };
-
-  const handleCallCustomer = (customer: Customer) => {
-    if (customer.phone && customer.phone.trim()) {
-      window.open(`tel:${customer.phone}`, '_blank');
-    } else {
-      alert('No phone number available for this customer');
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -261,6 +247,13 @@ export default function CustomersPage() {
           <p className="text-text-secondary mt-1">Manage your customer relationships and interactions</p>
         </div>
         <div className="flex items-center gap-3">
+          <Button 
+            onClick={() => setIsAddCustomerModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Plus className="w-4 h-4" />
+            Add Customer
+          </Button>
           <Button 
             variant="outline" 
             size="sm" 
@@ -279,7 +272,6 @@ export default function CustomersPage() {
             <Download className="w-4 h-4" />
             Export
           </Button>
-          
         </div>
       </div>
 
@@ -455,19 +447,6 @@ export default function CustomersPage() {
                               Edit Customer
                             </DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            <DropdownMenuItem onClick={() => handleScheduleAppointment(customer)}>
-                              <Calendar className="w-4 h-4 mr-2" />
-                              Schedule Appointment
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleSendMessage(customer)}>
-                              <MessageSquare className="w-4 h-4 mr-2" />
-                              Send Message
-                            </DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => handleCallCustomer(customer)}>
-                              <Phone className="w-4 h-4 mr-2" />
-                              Call Customer
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
                             <DropdownMenuItem onClick={() => handleAssignCustomer(customer)}>
                               <UserPlus className="w-4 h-4 mr-2" />
                               Assign to Team Member
@@ -523,7 +502,14 @@ export default function CustomersPage() {
       </Dialog>
 
       {/* Add Customer Modal */}
-      <AddCustomerModal onSuccess={fetchCustomers} />
+      <AddCustomerModal 
+        isOpen={isAddCustomerModalOpen}
+        onClose={() => setIsAddCustomerModalOpen(false)}
+        onSuccess={() => {
+          fetchCustomers();
+          setIsAddCustomerModalOpen(false);
+        }}
+      />
 
       {/* Import Modal */}
       <ImportModal
@@ -538,6 +524,89 @@ export default function CustomersPage() {
         onClose={() => setIsExportModalOpen(false)}
         onSuccess={handleExportSuccess}
       />
+
+      {/* View Customer Modal */}
+      <Dialog open={showViewModal} onOpenChange={setShowViewModal}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Customer Details</DialogTitle>
+            <DialogDescription>
+              View customer information and details
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedCustomer && (
+            <div className="space-y-6">
+              {/* Basic Information */}
+              <div className="border rounded-lg p-4">
+                <div className="font-semibold mb-4">Basic Information</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Full Name</label>
+                    <p className="text-gray-700">{selectedCustomer.name}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Phone</label>
+                    <p className="text-gray-700">{selectedCustomer.phone || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Interest</label>
+                    <p className="text-gray-700">{selectedCustomer.interest || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Floor</label>
+                    <p className="text-gray-700">Floor {selectedCustomer.floor}</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Visited Date</label>
+                    <p className="text-gray-700">
+                      {selectedCustomer.visited_date ? new Date(selectedCustomer.visited_date).toLocaleDateString() : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Status</label>
+                    <Badge variant={getStatusBadgeVariant(selectedCustomer.status)}>
+                      {selectedCustomer.status ? selectedCustomer.status.charAt(0).toUpperCase() + selectedCustomer.status.slice(1) : 'Unknown'}
+                    </Badge>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Assigned To</label>
+                    <p className="text-gray-700">
+                      {selectedCustomer.team_members 
+                        ? `${selectedCustomer.team_members.first_name} ${selectedCustomer.team_members.last_name}`
+                        : 'Unassigned'}
+                    </p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Created</label>
+                    <p className="text-gray-700">{formatDate(selectedCustomer.created_at)}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Notes */}
+              {selectedCustomer.notes && (
+                <div className="border rounded-lg p-4">
+                  <div className="font-semibold mb-4">Notes</div>
+                  <p className="text-gray-700">{selectedCustomer.notes}</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowViewModal(false)}>
+              Close
+            </Button>
+            <Button onClick={() => {
+              setShowViewModal(false);
+              handleEditCustomer(selectedCustomer!);
+            }}>
+              Edit Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Edit Customer Modal */}
       <EditCustomerModal

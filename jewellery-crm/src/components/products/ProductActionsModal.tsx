@@ -90,7 +90,11 @@ export default function ProductActionsModal({
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
   // Select helpers for material/color/karat (size)
-  const getSelectValue = (val: string, opts: string[]) => (opts.includes((val || '').trim()) ? (val || '').trim() : val ? 'custom' : '');
+  const getSelectValue = (val: string, opts: string[]) => {
+    if (!val || val.trim() === '') return 'custom';
+    const trimmedVal = val.trim();
+    return opts.includes(trimmedVal) ? trimmedVal : 'custom';
+  };
   const [materialSelect, setMaterialSelect] = useState<string>('');
   const [colorSelect, setColorSelect] = useState<string>('');
   const [karatSelect, setKaratSelect] = useState<string>('');
