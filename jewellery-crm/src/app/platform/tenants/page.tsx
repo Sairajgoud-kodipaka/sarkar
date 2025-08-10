@@ -46,7 +46,7 @@ export default function TenantsListPage() {
   const [deleting, setDeleting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
-  const { user, token, isAuthenticated } = useAuth();
+  const { user, isAuthenticated } = useAuth();
 
   const fetchTenants = async () => {
     try {
@@ -73,7 +73,7 @@ export default function TenantsListPage() {
 
   useEffect(() => {
     fetchTenants();
-  }, [user, token, isAuthenticated]);
+  }, [user, isAuthenticated]);
 
   const handleDeleteClick = (tenant: Tenant) => {
     setTenantToDelete(tenant);

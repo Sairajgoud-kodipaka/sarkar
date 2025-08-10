@@ -35,7 +35,7 @@ export function CustomerDetailModal({ open, onClose, customerId, onEdit, onDelet
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
 
   // Check if user can delete customers (managers and higher roles)
-  const canDeleteCustomers = user?.role && ['platform_admin', 'business_admin', 'manager'].includes(user.role);
+  const canDeleteCustomers = user?.role && ['business_admin', 'manager'].includes(user.role);
 
   useEffect(() => {
     if (open && customerId) {
@@ -57,10 +57,11 @@ export function CustomerDetailModal({ open, onClose, customerId, onEdit, onDelet
         try {
           const auditResponse = await apiService.getClientAuditLogs(customerId);
           if (auditResponse.success && auditResponse.data) {
-            const auditData = Array.isArray(auditResponse.data) 
-              ? auditResponse.data 
-              : auditResponse.data.results || auditResponse.data.data || [];
-            
+            const raw: any = auditResponse.data as any;
+            const auditData = Array.isArray(raw)
+              ? raw
+              : (raw?.results ?? raw?.data ?? []);
+
             // Transform audit logs to match our interface
             const transformedLogs = auditData.map((log: any) => ({
               id: log.id.toString(),
@@ -79,16 +80,8 @@ export function CustomerDetailModal({ open, onClose, customerId, onEdit, onDelet
           }
         } catch (auditError) {
           console.error('Error fetching audit logs:', auditError);
-          // Fallback to mock data if audit logs fail
-          setAuditLogs([
-            {
-              id: "1",
-              action: "Customer Created",
-              details: "New customer profile created",
-              timestamp: response.data.created_at || new Date().toISOString(),
-              user: "System"
-            }
-          ]);
+          // No fallback data - audit logs will be empty
+          setAuditLogs([]);
         }
       }
     } catch (error) {
@@ -106,7 +99,7 @@ export function CustomerDetailModal({ open, onClose, customerId, onEdit, onDelet
 
   const confirmDelete = () => {
     if (customer) {
-      onDelete(customer.id);
+      onDelete(String(customer.id));
       onClose();
       setDeleteModalOpen(false);
     }
@@ -339,7 +332,7 @@ export function CustomerDetailModal({ open, onClose, customerId, onEdit, onDelet
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <p className="text-sm text-gray-500">Category</p>
-                          <p className="font-medium">{interest.category || 'Not specified'}</p>
+                          <p className="font-medium">{(interest as any)?.category || 'Not specified'}</p>
                         </div>
                         <div>
                           <p className="text-sm text-gray-500">Products</p>

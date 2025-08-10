@@ -108,13 +108,16 @@ export function DataTable<T extends Record<string, unknown>>({
     if (!sortConfig) return filteredData;
 
     return [...filteredData].sort((a, b) => {
-      const aValue = a[sortConfig.key];
-      const bValue = b[sortConfig.key];
+      const aValue = a[sortConfig.key] as unknown as (string | number | boolean | null | undefined);
+      const bValue = b[sortConfig.key] as unknown as (string | number | boolean | null | undefined);
 
-      if (aValue < bValue) {
+      const aStr = aValue === null || aValue === undefined ? '' : String(aValue).toLowerCase();
+      const bStr = bValue === null || bValue === undefined ? '' : String(bValue).toLowerCase();
+
+      if (aStr < bStr) {
         return sortConfig.direction === 'asc' ? -1 : 1;
       }
-      if (aValue > bValue) {
+      if (aStr > bStr) {
         return sortConfig.direction === 'asc' ? 1 : -1;
       }
       return 0;
@@ -240,7 +243,21 @@ export function DataTable<T extends Record<string, unknown>>({
     if (column.render) {
       return column.render(row[column.key], row);
     }
-    return row[column.key];
+    const value = row[column.key] as unknown;
+    if (React.isValidElement(value as any)) {
+      return value as React.ReactNode;
+    }
+    if (value === null || value === undefined) {
+      return '';
+    }
+    if (typeof value === 'object') {
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return String(value);
+      }
+    }
+    return String(value);
   };
 
   if (loading) {

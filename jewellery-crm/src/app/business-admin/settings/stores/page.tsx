@@ -22,7 +22,7 @@ interface Store {
   city: string;
   state: string;
   timezone: string;
-  manager?: number;
+  manager?: string; // UUID string for team_members
   tenant: number;
   is_active: boolean;
   created_at: string;

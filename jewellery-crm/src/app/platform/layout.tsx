@@ -35,7 +35,7 @@ export default function PlatformAdminLayout({ children }: { children: React.Reac
         {/* Desktop Sidebar */}
         {!isMobile && (
           <aside className="sidebar">
-            <Sidebar role="platform_admin" />
+            <Sidebar />
           </aside>
         )}
         
@@ -71,7 +71,7 @@ export default function PlatformAdminLayout({ children }: { children: React.Reac
               
               {/* Sidebar content */}
               <div className="h-full overflow-y-auto">
-                <Sidebar role="platform_admin" onClose={handleCloseSidebar} />
+                <Sidebar onClose={handleCloseSidebar} />
               </div>
             </div>
           </>

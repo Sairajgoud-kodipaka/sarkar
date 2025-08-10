@@ -43,7 +43,8 @@ import {
   CheckCircle,
   DollarSign,
 } from 'lucide-react';
-import { apiService, User, Client, Product, Sale, Appointment } from '@/lib/api-service';
+import { apiService } from '@/lib/api-service';
+import { User, Client, Product, Sale, Appointment, TeamMember } from '@/types';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -79,20 +80,6 @@ interface StoreMetrics {
 }
 
 /**
- * Team member interface
- */
-interface TeamMember {
-  id: number;
-  name: string;
-  role: string;
-  sales: number;
-  customers: number;
-  target: number;
-  avatar: string | null;
-  status: 'present' | 'absent';
-}
-
-/**
  * Appointment interface
  */
 interface AppointmentDisplay {
@@ -118,6 +105,18 @@ interface StoreActivity {
   time: string;
 }
 
+// Local display type for team performance rows used in this component
+interface TeamMemberDisplay {
+  id: string;
+  name: string;
+  role: TeamMember['role'];
+  status: TeamMember['status'];
+  avatar?: string | null;
+  sales: number;
+  customers: number;
+  target: number;
+}
+
 /**
  * Store Manager Dashboard Component
  */
@@ -131,11 +130,11 @@ export function StoreManagerDashboard() {
       inventory: { totalProducts: 0, lowStock: 0, newArrivals: 0 },
     },
   });
-  const [teamPerformance, setTeamPerformance] = React.useState<TeamMember[]>([]);
+  const [teamPerformance, setTeamPerformance] = React.useState<TeamMemberDisplay[]>([]);
   const [todaysAppointments, setTodaysAppointments] = React.useState<AppointmentDisplay[]>([]);
   const [storeActivities, setStoreActivities] = React.useState<StoreActivity[]>([]);
   const [loading, setLoading] = React.useState(true);
-  const [currentUser, setCurrentUser] = React.useState<User | null>(null);
+  const [currentUser, setCurrentUser] = React.useState<any>(null);
   
   // Business Admin Dashboard Data
   const [dashboardData, setDashboardData] = React.useState<any>(null);
@@ -205,7 +204,8 @@ export function StoreManagerDashboard() {
 
   const getScopeDescription = () => {
     if (!user) return 'Store-specific data';
-    return `Store: ${user.store_name || 'Your Store'}`;
+    const storeName = (user as any)?.store_name || (user as any)?.storeName || 'Your Store';
+    return `Store: ${storeName}`;
   };
 
   React.useEffect(() => {
@@ -266,7 +266,7 @@ export function StoreManagerDashboard() {
       const authenticatedUser = user;
       console.log('👤 Using authenticated user:', authenticatedUser);
       if (authenticatedUser) {
-        setCurrentUser(authenticatedUser as User);
+        setCurrentUser(authenticatedUser as any);
         console.log('✅ Current user set:', authenticatedUser);
       } else {
         console.log('❌ No authenticated user available');
@@ -281,15 +281,15 @@ export function StoreManagerDashboard() {
         if (Array.isArray(teamResponse)) {
           const teamMembers = teamResponse;
           console.log('Team members found:', teamMembers.length);
-          const teamPerformanceData: TeamMember[] = teamMembers.map((member: User) => ({
-            id: member.id,
-            name: `${member.first_name} ${member.last_name}`,
-            role: member.role,
-            sales: 0, // Will be calculated from sales data
-            customers: 0, // Will be calculated from customer data
-            target: 100000, // Default target
-            avatar: null,
-            status: 'present' as const,
+          const teamPerformanceData: TeamMemberDisplay[] = teamMembers.map((member: any) => ({
+            id: String(member.id),
+            name: `${member.first_name ?? member.firstName ?? ''} ${member.last_name ?? member.lastName ?? ''}`.trim(),
+            role: (member.role ?? 'sales') as TeamMember['role'],
+            status: 'present',
+            avatar: member.avatar ?? null,
+            sales: 0,
+            customers: 0,
+            target: 100000,
           }));
           setTeamPerformance(teamPerformanceData);
           console.log('✅ Team performance data set:', teamPerformanceData);
@@ -354,17 +354,22 @@ export function StoreManagerDashboard() {
           console.log('Total products found:', totalProducts);
           console.log('Products data:', products);
           
-          lowStockProducts = products.filter((product: Product) => 
-            product.quantity <= product.min_quantity
-          ).length;
+          lowStockProducts = products.filter((product: Product) => {
+            const qty = (product as any).quantity ?? (product as any).stock_quantity ?? 0;
+            const minQty = (product as any).min_quantity ?? 0;
+            return qty <= minQty;
+          }).length;
           console.log('Low stock products:', lowStockProducts);
           
           // Calculate new arrivals (products created in last 7 days)
           const weekAgo = new Date();
           weekAgo.setDate(weekAgo.getDate() - 7);
-          newArrivals = products.filter((product: Product) => 
-            new Date(product.created_at) > weekAgo
-          ).length;
+          newArrivals = products.filter((product: Product) => {
+            const createdAt = (product as any).created_at as string | undefined;
+            if (!createdAt) return false;
+            const dt = new Date(createdAt);
+            return !isNaN(dt.getTime()) && dt > weekAgo;
+          }).length;
           console.log('New arrivals:', newArrivals);
         } else {
           console.log('❌ Failed to get products:', productsResponse);
@@ -408,15 +413,15 @@ export function StoreManagerDashboard() {
             const thisMonth = new Date().getMonth();
             const thisYear = new Date().getFullYear();
             
-            todaySales = sales.filter((sale: Sale) => 
-              sale.order_date?.startsWith(today)
-            ).reduce((sum: number, sale: Sale) => sum + sale.total_amount, 0);
+            todaySales = sales
+              .filter((sale: Sale) => (sale as any).date?.startsWith(today))
+              .reduce((sum: number, sale: Sale) => sum + ((sale as any).amount ?? 0), 0);
             console.log('Today sales:', todaySales);
             
             monthlyRevenue = sales.filter((sale: Sale) => {
-              const saleDate = new Date(sale.order_date);
+              const saleDate = new Date((sale as any).date);
               return saleDate.getMonth() === thisMonth && saleDate.getFullYear() === thisYear;
-            }).reduce((sum: number, sale: Sale) => sum + sale.total_amount, 0);
+            }).reduce((sum: number, sale: Sale) => sum + ((sale as any).amount ?? 0), 0);
             console.log('Monthly revenue:', monthlyRevenue);
           } else {
             console.log('❌ Failed to get sales:', salesResponse);
@@ -459,16 +464,20 @@ export function StoreManagerDashboard() {
           const appointments = Array.isArray(appointmentsResponse.data) ? appointmentsResponse.data : [];
           console.log('Total appointments found:', appointments.length);
           const today = new Date().toISOString().split('T')[0];
-          
+
           todaysAppointmentsData = appointments
-            .filter((appointment: Appointment) => appointment.date === today)
-            .map((appointment: Appointment) => ({
-              id: appointment.id,
-              customer: `Customer ${appointment.client}`, // Will need to fetch customer details
-              time: appointment.time,
-              type: appointment.purpose,
-              assignedTo: `User ${appointment.assigned_to || 'Unassigned'}`,
-              status: appointment.status as 'confirmed' | 'completed' | 'pending' | 'cancelled',
+            .filter((apt: any) => {
+              const dt = apt.appointment_date ? new Date(apt.appointment_date) : null;
+              if (!dt || isNaN(dt.getTime())) return false;
+              return dt.toISOString().split('T')[0] === today;
+            })
+            .map((apt: any) => ({
+              id: apt.id,
+              customer: apt.customer_name ? String(apt.customer_name) : `Customer ${apt.client ?? ''}`,
+              time: apt.appointment_date ? new Date(apt.appointment_date).toTimeString().slice(0, 5) : String(apt.time ?? ''),
+              type: String(apt.purpose ?? apt.type ?? 'appointment'),
+              assignedTo: apt.assigned_to ? `User ${apt.assigned_to}` : 'Unassigned',
+              status: (apt.status ?? 'pending') as 'confirmed' | 'completed' | 'pending' | 'cancelled',
             }));
           appointmentsCount = todaysAppointmentsData.length;
           console.log('Today appointments:', appointmentsCount);
@@ -483,7 +492,7 @@ export function StoreManagerDashboard() {
       console.log('📊 Updating store metrics...');
       setStoreMetrics({
         store: {
-          name: (authenticatedUser as any)?.store_name || authenticatedUser?.first_name || 'Store Dashboard',
+          name: (authenticatedUser as any)?.store_name || (authenticatedUser as any)?.storeName || (authenticatedUser as any)?.first_name || 'Store Dashboard',
           revenue: { 
             today: todaySales, 
             thisMonth: monthlyRevenue, 
@@ -517,7 +526,7 @@ export function StoreManagerDashboard() {
           type: 'sale',
           description: 'New sale completed',
           amount: todaySales,
-          employee: authenticatedUser?.first_name || 'Staff',
+          employee: (authenticatedUser as any)?.first_name || (authenticatedUser as any)?.firstName || 'Staff',
           time: '2 hours ago'
         },
         {
@@ -525,7 +534,7 @@ export function StoreManagerDashboard() {
           type: 'customer',
           description: 'New customer registered',
           customer: 'New Customer',
-          employee: authenticatedUser?.first_name || 'Staff',
+          employee: (authenticatedUser as any)?.first_name || (authenticatedUser as any)?.firstName || 'Staff',
           time: '4 hours ago'
         },
         {
@@ -558,14 +567,14 @@ export function StoreManagerDashboard() {
 
   return (
     <DashboardLayout
-      title={`${user?.store_name || 'Store'} Dashboard`}
-      subtitle={`${user?.store_name || 'Your Store'} - Daily operations and team performance`}
+      title={`${(user as any)?.store_name || (user as any)?.storeName || 'Store'} Dashboard`}
+      subtitle={`${(user as any)?.store_name || (user as any)?.storeName || 'Your Store'} - Daily operations and team performance`}
       actions={
         <div className="flex items-center space-x-2">
           <div className="flex items-center space-x-2 px-3 py-1 bg-blue-50 rounded-lg border">
             <Store className="w-4 h-4 text-blue-600" />
             <span className="text-sm font-medium text-blue-700">
-              {user?.store_name || 'Your Store'}
+              {(user as any)?.store_name || (user as any)?.storeName || 'Your Store'}
             </span>
           </div>
           <Button variant="outline" size="sm" onClick={() => fetchDashboardData()}>
@@ -591,7 +600,7 @@ export function StoreManagerDashboard() {
             <div className="flex items-center gap-2 mb-4">
               <Store className="w-5 h-5 text-blue-600" />
               <h2 className="text-lg font-semibold text-text-primary">
-                {user?.store_name || 'Your Store'} - Key Performance Indicators
+                {(user as any)?.store_name || (user as any)?.storeName || 'Your Store'} - Key Performance Indicators
               </h2>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -683,13 +692,13 @@ export function StoreManagerDashboard() {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Store className="w-5 h-5" />
-                Store Performance - {user?.store_name || 'Your Store'}
+                Store Performance - {(user as any)?.store_name || (user as any)?.storeName || 'Your Store'}
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {dashboardData.store_performance?.filter((store: any) => 
-                  store.name === user?.store_name
+                  store.name === ((user as any)?.store_name || (user as any)?.storeName)
                 ).map((store: any, index: number) => (
                   <div key={store.id} className="border rounded-lg p-4">
                     <div className="flex items-center justify-between mb-2">

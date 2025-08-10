@@ -16,6 +16,10 @@ import {
   MoreHorizontal
 } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
+import { Customer as AdminCustomerType, Client } from '@/lib/api-service';
+import { CustomerDetailModal } from '@/components/customers/CustomerDetailModal';
+import { EditCustomerModal } from '@/components/customers/EditCustomerModal';
+import AddCustomerModal from '@/components/customers/AddCustomerModal';
 
 interface Customer {
   id: number;
@@ -36,6 +40,11 @@ export default function SalesCustomersPage() {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [viewCustomerId, setViewCustomerId] = useState<string | null>(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [editingCustomer, setEditingCustomer] = useState<Client | null>(null);
+  const [isEditOpen, setIsEditOpen] = useState(false);
 
   useEffect(() => {
     fetchCustomers();
@@ -73,6 +82,7 @@ export default function SalesCustomersPage() {
     return new Date(dateString).toLocaleDateString('en-IN');
   };
 
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -81,7 +91,7 @@ export default function SalesCustomersPage() {
           <h1 className="text-3xl font-bold text-gray-900">Customers</h1>
           <p className="text-gray-600">Manage your customer relationships</p>
         </div>
-        <Button>
+        <Button onClick={() => setIsAddOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Customer
         </Button>
@@ -167,9 +177,34 @@ export default function SalesCustomersPage() {
                     <Badge variant={getStatusBadgeVariant(customer.status)}>
                       {customer.status}
                     </Badge>
-                    <Button variant="ghost" size="sm">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setViewCustomerId(String(customer.id));
+                    setIsViewOpen(true);
+                  }}
+                >
+                  View
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    // Load full client details for editing
+                    try {
+                      const resp = await apiService.getClient(String(customer.id));
+                      if (resp.success) {
+                        setEditingCustomer(resp.data as Client);
+                        setIsEditOpen(true);
+                      }
+                    } catch (e) {
+                      console.error('Failed to load customer', e);
+                    }
+                  }}
+                >
+                  Edit
+                </Button>
                   </div>
                 </div>
               ))}
@@ -185,6 +220,43 @@ export default function SalesCustomersPage() {
           )}
         </CardContent>
       </Card>
+
+      <AddCustomerModal
+        isOpen={isAddOpen}
+        onClose={() => setIsAddOpen(false)}
+        onSuccess={() => fetchCustomers()}
+      />
+
+      {/* View Details */}
+      <CustomerDetailModal
+        open={isViewOpen}
+        onClose={() => setIsViewOpen(false)}
+        customerId={viewCustomerId}
+        onEdit={(client) => {
+          setEditingCustomer(client);
+          setIsEditOpen(true);
+        }}
+        onDelete={async (id) => {
+          try {
+            await apiService.deleteCustomer(Number(id));
+            setIsViewOpen(false);
+            fetchCustomers();
+          } catch (e) {
+            console.error('Delete failed', e);
+          }
+        }}
+      />
+
+      {/* Edit Customer */}
+      <EditCustomerModal
+        open={isEditOpen}
+        onClose={() => setIsEditOpen(false)}
+        customer={editingCustomer}
+        onCustomerUpdated={() => {
+          setIsEditOpen(false);
+          fetchCustomers();
+        }}
+      />
     </div>
   );
 }

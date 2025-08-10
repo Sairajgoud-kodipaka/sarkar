@@ -5,6 +5,8 @@ import { X, Check, AlertTriangle, Info, Calendar, TrendingUp, Package, Bell } fr
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Notification, NotificationType, NotificationPriority } from '@/types';
+import { useRouter } from 'next/navigation';
+import { formatDistanceToNow } from 'date-fns';
 
 interface ToastNotificationProps {
   notification: Notification;
@@ -93,6 +95,7 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
   onAction,
   duration = 5000
 }) => {
+  const router = useRouter();
   const [isVisible, setIsVisible] = useState(true);
   const [isHovered, setIsHovered] = useState(false);
   const styles = getPriorityStyles(notification.priority);
@@ -110,11 +113,20 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
     return () => clearTimeout(timer);
   }, [duration, isHovered, notification.isPersistent, onClose]);
 
-  const handleAction = () => {
+  const handleAction = async () => {
     if (onAction) {
       onAction();
+    } else if (notification.actionUrl) {
+      try {
+        // Use Next.js router for client-side navigation
+        router.push(notification.actionUrl);
+        onClose(); // Close the toast after navigation
+      } catch (error) {
+        console.error('Navigation error:', error);
+        // Fallback to window.location if router fails
+        window.location.href = notification.actionUrl;
+      }
     }
-    onClose();
   };
 
   if (!isVisible) {

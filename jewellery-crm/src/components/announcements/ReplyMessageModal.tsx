@@ -48,7 +48,7 @@ export default function ReplyMessageModal({ message, onSuccess }: ReplyMessageMo
     try {
       setLoading(true);
       
-      const response = await apiService.replyToMessage(message.id, {
+      const response = await apiService.replyToMessage(String(message.id), {
         content: formData.content,
         message_type: formData.message_type,
         is_internal: formData.is_internal,

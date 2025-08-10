@@ -1,6 +1,6 @@
 'use client';
 
-import { Category } from '@/lib/api-service';
+import { Category } from '@/types';
 import { useParams } from 'next/navigation';
 
 interface CategoryGridProps {

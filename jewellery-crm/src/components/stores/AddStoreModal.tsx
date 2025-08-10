@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { apiService } from '@/lib/api-service';
-import { Loader2, X } from 'lucide-react';
+import { Loader2, X, UserPlus } from 'lucide-react';
+import AddTeamMemberModal from '@/components/team/AddTeamMemberModal';
 
 interface AddStoreModalProps {
   isOpen: boolean;
@@ -16,7 +17,6 @@ interface AddStoreModalProps {
 
 interface StoreFormData {
   name: string;
-  code: string;
   address: string;
   city: string;
   state: string;
@@ -35,7 +35,6 @@ interface UserOption {
 export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreModalProps) {
   const [formData, setFormData] = useState<StoreFormData>({
     name: '',
-    code: '',
     address: '',
     city: '',
     state: '',
@@ -46,6 +45,7 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
   const [error, setError] = useState<string | null>(null);
   const [teamMembers, setTeamMembers] = useState<UserOption[]>([]);
   const [loadingMembers, setLoadingMembers] = useState(false);
+  const [showAddManager, setShowAddManager] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -67,9 +67,11 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
         role: m.role,
       }));
       setTeamMembers(options);
+      return options;
     } catch (error) {
       console.error('Failed to fetch team members:', error);
       setTeamMembers([]);
+      return [] as UserOption[];
     } finally {
       setLoadingMembers(false);
     }
@@ -83,7 +85,6 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
     try {
       const response = await apiService.createStore({
         name: formData.name,
-        code: formData.code,
         address: formData.address,
         city: formData.city,
         state: formData.state,
@@ -96,7 +97,6 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
         // Reset form
         setFormData({
           name: '',
-          code: '',
           address: '',
           city: '',
           state: '',
@@ -114,7 +114,7 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
     }
   };
 
-  const handleInputChange = (field: keyof StoreFormData, value: string | boolean | number) => {
+  const handleInputChange = (field: keyof StoreFormData, value: string | boolean | number | undefined) => {
     setFormData(prev => ({
       ...prev,
       [field]: value
@@ -147,17 +147,6 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
               value={formData.name}
               onChange={(e) => handleInputChange('name', e.target.value)}
               placeholder="Enter store name"
-              required
-            />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="code">Store Code *</Label>
-            <Input
-              id="code"
-              value={formData.code}
-              onChange={(e) => handleInputChange('code', e.target.value)}
-              placeholder="Enter store code"
               required
             />
           </div>
@@ -201,7 +190,13 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
             <Label htmlFor="manager">Manager</Label>
             <Select
               value={formData.manager || 'none'}
-              onValueChange={(value) => handleInputChange('manager', value && value !== 'none' ? value : undefined)}
+              onValueChange={async (value) => {
+                if (value === '__add_new__') {
+                  setShowAddManager(true);
+                  return;
+                }
+                handleInputChange('manager', value && value !== 'none' ? value : undefined);
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder="Select manager" />
@@ -223,6 +218,9 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
                         {member.first_name} {member.last_name} ({member.role})
                       </SelectItem>
                     ))}
+                    <SelectItem value="__add_new__">
+                      + Add New Manager
+                    </SelectItem>
                   </>
                 )}
               </SelectContent>
@@ -265,6 +263,22 @@ export default function AddStoreModal({ isOpen, onClose, onSuccess }: AddStoreMo
           </div>
         </form>
       </div>
+      {/* Inline Add Manager Modal */}
+      <AddTeamMemberModal
+        hideTrigger
+        open={showAddManager}
+        onOpenChange={(o) => setShowAddManager(o)}
+        onSuccess={async (created) => {
+          setShowAddManager(false);
+          const options = await fetchTeamMembers();
+          if (created?.email) {
+            const match = options.find(o => o.email === created.email);
+            if (match?.id) {
+              handleInputChange('manager', match.id);
+            }
+          }
+        }}
+      />
     </div>
   );
 } 

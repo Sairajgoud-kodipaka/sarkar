@@ -123,7 +123,8 @@ export default function EscalationsPage() {
 
   const handleAssignToMe = async (escalationId: string) => {
     try {
-      const response = await apiService.assignEscalation(escalationId, user?.id || 0);
+      const userId = user?.id ? parseInt(user.id, 10) : 0;
+      const response = await apiService.assignEscalation(escalationId, userId);
       if (response.success) {
         toast.success('Escalation assigned to you');
         handleRefresh();

@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface AuthWrapperProps {
   children: React.ReactNode;
-  requiredRole?: string;
+  requiredRole?: string | string[];
 }
 
 export function AuthWrapper({ children, requiredRole }: AuthWrapperProps) {
@@ -25,18 +25,10 @@ export function AuthWrapper({ children, requiredRole }: AuthWrapperProps) {
 
       if (requiredRole) {
         const userRole = user.user_metadata?.role;
-        if (userRole !== requiredRole) {
-          console.log(`User role ${userRole} doesn't match required role ${requiredRole}, redirecting`);
-          // Redirect to appropriate dashboard based on user role
-          const roleRoutes = {
-            platform_admin: '/platform/dashboard',
-            business_admin: '/business-admin/dashboard',
-            floor_manager: '/floor-manager/dashboard',
-            inhouse_sales: '/sales/dashboard',
-          };
-          
-          const redirectPath = roleRoutes[userRole as keyof typeof roleRoutes] || '/dashboard';
-          router.push(redirectPath);
+        const requiredList = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+        if (!userRole || !requiredList.includes(userRole)) {
+          console.log(`Role access failed (have: ${userRole}, need: ${requiredList.join(', ')}). Redirecting to /login`);
+          router.push('/login');
           return;
         }
       }
@@ -60,8 +52,9 @@ export function AuthWrapper({ children, requiredRole }: AuthWrapperProps) {
 
   if (requiredRole) {
     const userRole = user.user_metadata?.role;
-    if (userRole !== requiredRole) {
-      return null; // Will redirect to appropriate dashboard
+    const requiredList = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+    if (!requiredList.includes(userRole)) {
+      return null; // Will redirect to login
     }
   }
 

@@ -10,11 +10,23 @@ import { UserPlus, Loader2 } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 
 interface AddTeamMemberModalProps {
-  onSuccess?: () => void;
+  onSuccess?: (created?: { id?: string; email?: string; first_name?: string; last_name?: string; role?: string }) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+  hideTrigger?: boolean;
 }
 
-export default function AddTeamMemberModal({ onSuccess }: AddTeamMemberModalProps) {
-  const [open, setOpen] = useState(false);
+export default function AddTeamMemberModal({ onSuccess, open, onOpenChange, hideTrigger }: AddTeamMemberModalProps) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  const isControlled = open !== undefined;
+  const modalOpen = isControlled ? open! : internalOpen;
+  const setModalOpen = (v: boolean) => {
+    if (isControlled) {
+      onOpenChange?.(v);
+    } else {
+      setInternalOpen(v);
+    }
+  };
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     first_name: '',
@@ -52,8 +64,8 @@ export default function AddTeamMemberModal({ onSuccess }: AddTeamMemberModalProp
           password: '',
         });
         
-        setOpen(false);
-        onSuccess?.();
+        setModalOpen(false);
+        onSuccess?.({ email: formData.email, first_name: formData.first_name, last_name: formData.last_name, role: formData.role });
         alert('Team member created successfully!');
       } else {
         throw new Error(result.message || 'Failed to create team member');
@@ -68,13 +80,15 @@ export default function AddTeamMemberModal({ onSuccess }: AddTeamMemberModalProp
   };
 
   return (
-    <Dialog open={open} onOpenChange={setOpen}>
-      <DialogTrigger asChild>
-        <Button>
-          <UserPlus className="w-4 h-4 mr-2" />
-          Add Team Member
-        </Button>
-      </DialogTrigger>
+    <Dialog open={modalOpen} onOpenChange={setModalOpen}>
+      {!hideTrigger && (
+        <DialogTrigger asChild>
+          <Button>
+            <UserPlus className="w-4 h-4 mr-2" />
+            Add Team Member
+          </Button>
+        </DialogTrigger>
+      )}
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle>Add New Team Member</DialogTitle>
@@ -164,7 +178,7 @@ export default function AddTeamMemberModal({ onSuccess }: AddTeamMemberModalProp
           </div>
 
           <div className="flex justify-end gap-2 pt-4">
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+            <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>
               Cancel
             </Button>
             <Button type="submit" disabled={loading}>

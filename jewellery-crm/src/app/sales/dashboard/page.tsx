@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { TrendingUp, Users, Percent, ShoppingBag, Calendar, DollarSign } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
-import { Sale, Client, Appointment } from '@/lib/api-service';
+import { Deal, Customer, Appointment } from '@/types';
 
 interface SalesStats {
   totalSales: number;
@@ -107,8 +107,20 @@ export default function SalesDashboardPage() {
         activities.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setRecentActivities(activities.slice(0, 8));
 
-        // Mock top products (in real implementation, this would come from backend)
-        setTopProducts(['Gold Necklace', 'Diamond Ring', 'Silver Anklet', 'Pearl Earrings']);
+        // Get top products from real API
+        try {
+          const productsResponse = await apiService.getProducts();
+          if (productsResponse.success && productsResponse.data) {
+            const topProducts = productsResponse.data
+              .sort((a: any, b: any) => (b.sales_count || 0) - (a.sales_count || 0))
+              .slice(0, 4)
+              .map((p: any) => p.name);
+            setTopProducts(topProducts);
+          }
+        } catch (error) {
+          console.error('Error fetching top products:', error);
+          setTopProducts([]);
+        }
 
         console.log('Dashboard data fetch completed successfully');
 

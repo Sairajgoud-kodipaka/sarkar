@@ -14,6 +14,10 @@ import {
   XCircle,
   AlertCircle
 } from 'lucide-react';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { apiService } from '@/lib/api-service';
+import { toast } from 'sonner';
 
 interface Appointment {
   id: number;
@@ -34,6 +38,13 @@ export default function SalesAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedDate, setSelectedDate] = useState<string>('');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newAppointment, setNewAppointment] = useState({
+    customer_name: '',
+    customer_phone: '',
+    appointment_date: '',
+    floor: 1,
+  });
 
   useEffect(() => {
     fetchAppointments();
@@ -69,53 +80,38 @@ export default function SalesAppointmentsPage() {
         setAppointments([]);
       }
       
-      /* OLD MOCK DATA - REPLACED WITH REAL API
-      const mockAppointments: Appointment[] = [
-        {
-          id: 1,
-          title: 'Gold Necklace Consultation',
-          customer_name: 'Priya Sharma',
-          date: '2024-01-15',
-          time: '10:00',
-          duration: 60,
-          type: 'consultation',
-          status: 'confirmed',
-          location: 'Store Floor 1',
-          notes: 'Interested in wedding collection',
-          created_at: '2024-01-10'
-        },
-        {
-          id: 2,
-          title: 'Diamond Ring Fitting',
-          customer_name: 'Rajesh Kumar',
-          date: '2024-01-16',
-          time: '14:30',
-          duration: 45,
-          type: 'fitting',
-          status: 'scheduled',
-          location: 'Store Floor 2',
-          notes: 'Ring size 18, platinum band',
-          created_at: '2024-01-12'
-        },
-        {
-          id: 3,
-          title: 'Wedding Collection Delivery',
-          customer_name: 'Anita Patel',
-          date: '2024-01-17',
-          time: '16:00',
-          duration: 30,
-          type: 'delivery',
-          status: 'completed',
-          location: 'Store Floor 1',
-          notes: 'Complete wedding set delivery',
-          created_at: '2024-01-08'
-        }
-      ];
-      */ // End of commented mock data
+      // Mock data removed - using real API data
     } catch (error) {
       console.error('Error fetching appointments:', error);
+      toast.error('Failed to load appointments');
+      setAppointments([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateAppointment = async () => {
+    try {
+      if (!newAppointment.customer_name || !newAppointment.customer_phone || !newAppointment.appointment_date) {
+        toast.error('Please fill all required fields');
+        return;
+      }
+      const resp = await apiService.createAppointment({
+        customer_name: newAppointment.customer_name,
+        customer_phone: newAppointment.customer_phone,
+        appointment_date: newAppointment.appointment_date,
+        floor: newAppointment.floor,
+      });
+      if (resp.success) {
+        toast.success('Appointment created');
+        setIsCreateOpen(false);
+        fetchAppointments();
+      } else {
+        toast.error(resp.message || 'Failed to create appointment');
+      }
+    } catch (e) {
+      console.error('Create appointment error', e);
+      toast.error('Failed to create appointment');
     }
   };
 
@@ -167,6 +163,9 @@ export default function SalesAppointmentsPage() {
   const upcomingAppointments = appointments.filter(apt => apt.date >= today && apt.status !== 'cancelled');
   const completedAppointments = appointments.filter(apt => apt.status === 'completed');
 
+  const [selectedAppointment, setSelectedAppointment] = useState<Appointment | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -175,7 +174,7 @@ export default function SalesAppointmentsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Appointments</h1>
           <p className="text-gray-600">Manage your customer appointments</p>
         </div>
-        <Button>
+        <Button onClick={() => setIsCreateOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Schedule Appointment
         </Button>
@@ -260,6 +259,37 @@ export default function SalesAppointmentsPage() {
         </CardContent>
       </Card>
 
+      {/* Create Appointment Modal */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Schedule Appointment</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium">Customer Name</label>
+              <Input value={newAppointment.customer_name} onChange={(e) => setNewAppointment({ ...newAppointment, customer_name: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Customer Phone</label>
+              <Input value={newAppointment.customer_phone} onChange={(e) => setNewAppointment({ ...newAppointment, customer_phone: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Date & Time</label>
+              <Input type="datetime-local" value={newAppointment.appointment_date} onChange={(e) => setNewAppointment({ ...newAppointment, appointment_date: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Floor</label>
+              <Input type="number" value={newAppointment.floor} onChange={(e) => setNewAppointment({ ...newAppointment, floor: Number(e.target.value) })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateAppointment}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Appointments List */}
       <Card>
         <CardHeader>
@@ -318,7 +348,14 @@ export default function SalesAppointmentsPage() {
                         </div>
                       </Badge>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedAppointment(appointment);
+                        setIsDetailsOpen(true);
+                      }}
+                    >
                       View Details
                     </Button>
                   </div>
@@ -336,6 +373,33 @@ export default function SalesAppointmentsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Appointment Details Dialog */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Appointment Details</DialogTitle>
+            <DialogDescription>Review appointment information</DialogDescription>
+          </DialogHeader>
+          {selectedAppointment && (
+            <div className="space-y-3">
+              <div className="font-semibold">{selectedAppointment.title}</div>
+              <div className="text-sm text-gray-600">Customer: {selectedAppointment.customer_name}</div>
+              <div className="text-sm text-gray-600">Date: {formatDate(selectedAppointment.date)} at {formatTime(selectedAppointment.time)}</div>
+              <div className="text-sm text-gray-600">Duration: {selectedAppointment.duration} min</div>
+              <div className="text-sm text-gray-600">Location: {selectedAppointment.location}</div>
+              {selectedAppointment.notes && (
+                <div className="text-sm text-gray-600">Notes: {selectedAppointment.notes}</div>
+              )}
+              <div>
+                <Badge className={getStatusColor(selectedAppointment.status)}>
+                  {(selectedAppointment.status || 'scheduled').replace('_', ' ')}
+                </Badge>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

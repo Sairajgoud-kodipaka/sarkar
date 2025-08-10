@@ -16,8 +16,12 @@ import {
   X,
   Award,
   TrendingUp,
-  Target
+  Target,
+  Users,
+  MessageSquare,
+  PhoneCall
 } from 'lucide-react';
+import { apiService } from '@/lib/api-service';
 
 interface SalesProfile {
   id: number;
@@ -46,9 +50,12 @@ export default function SalesProfilePage() {
     email: '',
     phone: '',
   });
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [showTeamSection, setShowTeamSection] = useState(false);
 
   useEffect(() => {
     fetchProfile();
+    fetchTeamMembers();
   }, []);
 
   const fetchProfile = async () => {
@@ -61,33 +68,53 @@ export default function SalesProfilePage() {
         // Find current user's profile (you might want to match by email or ID)
         // For now, using the first sales associate as example
         const userProfile = teamMembers.find(member => 
-          member.role === 'sales_associate' || member.role === 'inhouse_sales'
+          member.role === 'sales_associate'
         ) || teamMembers[0];
         
-        const transformedProfile: SalesProfile = {
-          id: userProfile.id || 1,
-          first_name: userProfile.first_name,
-          last_name: userProfile.last_name,
-          email: userProfile.email,
-          phone: userProfile.phone || '',
-          role: userProfile.role,
-          floor: userProfile.floor || 1,
-          store: 'Main Store', // Default value
-          join_date: userProfile.created_at?.split('T')[0] || '',
-          total_sales: 0, // Would need to calculate from sales table
-          total_orders: 0, // Would need to calculate from orders table
-          conversion_rate: 0, // Would need to calculate
-          target_achievement: 0, // Would need to calculate
-          avatar_url: userProfile.avatar || ''
-        };
+        // Calculate real performance metrics
+        const salesResponse = await apiService.getSales();
+        const ordersResponse = await apiService.getOrders();
         
-        setProfile(transformedProfile);
-        setEditForm({
-          first_name: transformedProfile.first_name,
-          last_name: transformedProfile.last_name,
-          email: transformedProfile.email,
-          phone: transformedProfile.phone,
-        });
+        if (salesResponse.success && ordersResponse.success) {
+          const userSales = salesResponse.data.filter((sale: any) => 
+            sale.sales_person_id === userProfile.id
+          );
+          const userOrders = ordersResponse.data.filter((order: any) => 
+            order.sales_person_id === userProfile.id
+          );
+          
+          const totalSales = userSales.reduce((sum: number, sale: any) => 
+            sum + (sale.total_amount || 0), 0
+          );
+          const totalOrders = userOrders.length;
+          const conversionRate = totalOrders > 0 ? 
+            (userSales.length / totalOrders) * 100 : 0;
+          
+          const transformedProfile: SalesProfile = {
+            id: Number(userProfile.id),
+            first_name: userProfile.name.split(' ')[0] || '',
+            last_name: userProfile.name.split(' ').slice(1).join(' ') || '',
+            email: userProfile.email,
+            phone: userProfile.phone || '',
+            role: userProfile.role,
+            floor: Number(userProfile.floor) || 1,
+            store: 'Main Store', // Default value
+            join_date: userProfile.joinDate?.split('T')[0] || '',
+            total_sales: totalSales,
+            total_orders: totalOrders,
+            conversion_rate: conversionRate,
+            target_achievement: 75, // Default target, could be configurable
+            avatar_url: userProfile.avatar || ''
+          };
+          
+          setProfile(transformedProfile);
+          setEditForm({
+            first_name: transformedProfile.first_name,
+            last_name: transformedProfile.last_name,
+            email: transformedProfile.email,
+            phone: transformedProfile.phone,
+          });
+        }
       } else {
         console.log('No team members found');
         setProfile(null);
@@ -96,6 +123,15 @@ export default function SalesProfilePage() {
       console.error('Error fetching profile:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchTeamMembers = async () => {
+    try {
+      const members = await apiService.getTeamMembers();
+      setTeamMembers(members);
+    } catch (error) {
+      console.error('Error fetching team members:', error);
     }
   };
 
@@ -379,6 +415,53 @@ export default function SalesProfilePage() {
                 Set Targets
               </Button>
             </CardContent>
+          </Card>
+
+          {/* Team Communication */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span>Team Communication</span>
+                <Button 
+                  variant="ghost" 
+                  size="sm"
+                  onClick={() => setShowTeamSection(!showTeamSection)}
+                >
+                  {showTeamSection ? 'Hide' : 'Show'}
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            {showTeamSection && (
+              <CardContent className="space-y-4">
+                <div className="space-y-3">
+                  {teamMembers.slice(0, 5).map((member) => (
+                    <div key={member.id} className="flex items-center justify-between p-2 bg-gray-50 rounded-lg">
+                      <div className="flex items-center space-x-3">
+                        <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                          <User className="w-4 h-4 text-blue-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{member.name}</p>
+                          <p className="text-xs text-gray-500">{member.role}</p>
+                        </div>
+                      </div>
+                      <div className="flex space-x-1">
+                        <Button size="sm" variant="ghost" className="p-1">
+                          <MessageSquare className="w-3 h-3" />
+                        </Button>
+                        <Button size="sm" variant="ghost" className="p-1">
+                          <PhoneCall className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <Button variant="outline" className="w-full">
+                  <Users className="w-4 h-4 mr-2" />
+                  View All Team Members
+                </Button>
+              </CardContent>
+            )}
           </Card>
         </div>
       </div>

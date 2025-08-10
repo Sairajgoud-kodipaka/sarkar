@@ -5,6 +5,7 @@ import { ToastNotification } from './ToastNotification';
 import { useNotifications } from '@/hooks/useNotifications';
 import { useAuth } from '@/hooks/useAuth';
 import { Notification } from '@/types';
+import { useRouter } from 'next/navigation';
 
 interface NotificationManagerProps {
   maxToasts?: number;
@@ -15,6 +16,7 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
   maxToasts = 3,
   position = 'top-right'
 }) => {
+  const router = useRouter();
   const { state, actions } = useNotifications();
   const { user, isAuthenticated } = useAuth();
   const [activeToasts, setActiveToasts] = useState<Notification[]>([]);
@@ -38,9 +40,11 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
 
     // Store manager and sales team can only see their store's notifications
     if (user.role === 'store_manager' || user.role === 'sales_team') {
+      const tenantId = (user as any)?.tenantId ?? (user as any)?.tenant?.id ?? (user as any)?.tenant;
+      const storeId = (user as any)?.storeId ?? (user as any)?.store?.id ?? (user as any)?.store;
       return notifications.filter(notification => 
-        notification.tenantId === user.tenant?.toString() &&
-        (!notification.storeId || notification.storeId === user.store?.toString())
+        (tenantId ? notification.tenantId === String(tenantId) : true) &&
+        (!notification.storeId || (storeId ? notification.storeId === String(storeId) : true))
       );
     }
 
@@ -48,7 +52,7 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
     if (user.role === 'telecaller') {
       return notifications.filter(notification => 
         notification.userId === user.id.toString() ||
-        notification.tenantId === user.tenant?.toString()
+        notification.tenantId === String((user as any)?.tenantId ?? (user as any)?.tenant)
       );
     }
 
@@ -141,9 +145,16 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
     // Remove from active toasts
     setActiveToasts(prev => prev.filter(toast => toast.id !== notification.id));
     
-    // Navigate to action URL if available
+    // Navigate to action URL if available using Next.js router
     if (notification.actionUrl) {
-      window.location.href = notification.actionUrl;
+      try {
+        // Use Next.js router for client-side navigation
+        router.push(notification.actionUrl);
+      } catch (error) {
+        console.error('Navigation error:', error);
+        // Fallback to window.location if router fails
+        window.location.href = notification.actionUrl;
+      }
     }
   };
 

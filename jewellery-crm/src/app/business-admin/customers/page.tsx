@@ -18,7 +18,7 @@ import { EditCustomerModal } from '@/components/customers/EditCustomerModal';
 import { supabase } from '@/lib/supabase';
 import DeleteConfirmationModal from '@/components/ui/DeleteConfirmationModal';
 
-// Updated interface to match your actual Supabase schema
+// Interface matching your actual Supabase schema
 interface Customer {
   id: number;
   name: string;
@@ -60,7 +60,7 @@ export default function CustomersPage() {
   // Check if user can delete customers (managers and higher roles)
   const canDeleteCustomers = (() => {
     const role = (user as any)?.user_metadata?.role as string | undefined;
-    return !!role && ['platform_admin', 'business_admin', 'manager'].includes(role);
+    return !!role && ['business_admin', 'manager'].includes(role);
   })();
 
   // Test function to check database connection

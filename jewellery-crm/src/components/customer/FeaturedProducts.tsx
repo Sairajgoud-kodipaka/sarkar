@@ -81,8 +81,8 @@ export default function FeaturedProducts({ products }: FeaturedProductsProps) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {visibleProducts.map((product) => {
           const isWishlisted = wishlist.includes(product.id);
-          const discountPercentage = getDiscountPercentage(product.selling_price, product.discount_price);
-          const displayPrice = product.discount_price || product.selling_price;
+          const discountPercentage = getDiscountPercentage(product.selling_price ?? product.price, product.discount_price as number | undefined);
+          const displayPrice = (product.discount_price as number | undefined) ?? product.selling_price ?? product.price;
 
           return (
             <div key={product.id} className="group bg-white rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden">
@@ -185,7 +185,7 @@ export default function FeaturedProducts({ products }: FeaturedProductsProps) {
                   </span>
                   {product.discount_price && (
                     <span className="text-sm text-gray-500 line-through">
-                      {formatPrice(product.selling_price)}
+                      {formatPrice((product.selling_price ?? product.price) as number)}
                     </span>
                   )}
                 </div>

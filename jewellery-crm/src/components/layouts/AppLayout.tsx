@@ -87,14 +87,14 @@ export function AppLayout({ children, className }: AppLayoutProps) {
           onClose={() => setSidebarOpen(false)}
           className={cn(
             'transition-transform duration-300 ease-in-out',
-            isMobile ? 'fixed z-50' : 'fixed'
+            isMobile ? 'fixed z-50' : 'fixed left-0 top-0 h-screen z-30'
           )}
         />
 
-        {/* Main Content Area */}
+        {/* Main Content Area - Use proper grid layout */}
         <div className={cn(
           'transition-all duration-300 ease-in-out',
-          isMobile ? 'ml-0' : 'ml-60' // 60 = 240px (sidebar width)
+          isMobile ? 'ml-0 w-full' : 'main-content-with-sidebar' // Use CSS class for consistent positioning
         )}>
           {/* Header */}
           <Header 
@@ -105,7 +105,8 @@ export function AppLayout({ children, className }: AppLayoutProps) {
           {/* Main Content */}
           <main className={cn(
             'p-6 pb-20 lg:pb-6', // Extra bottom padding for mobile nav
-            'min-h-[calc(100vh-4rem)]' // Subtract header height
+            'min-h-[calc(100vh-4rem)]', // Subtract header height
+            'overflow-y-auto' // Make content scrollable
           )}>
             {children}
           </main>

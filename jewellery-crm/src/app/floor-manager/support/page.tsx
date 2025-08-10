@@ -5,11 +5,17 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import {
   MessageSquare, AlertCircle, CheckCircle, Clock, Search, Plus, Filter,
   Phone, Mail, User, Calendar, Eye, Edit, Reply, Flag
 } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/api-service';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 
 interface SupportTicket {
   id: string;
@@ -28,6 +34,8 @@ interface SupportTicket {
 }
 
 export default function FloorManagerSupportPage() {
+  const router = useRouter();
+  const { user } = useAuth();
   const [tickets, setTickets] = useState<SupportTicket[]>([]);
   const [filteredTickets, setFilteredTickets] = useState<SupportTicket[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
@@ -36,8 +44,39 @@ export default function FloorManagerSupportPage() {
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [isLoading, setIsLoading] = useState(true);
 
+  // New Ticket Modal
+  const [isNewModalOpen, setIsNewModalOpen] = useState(false);
+  const [newTicket, setNewTicket] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
+    category: 'general',
+  });
+
+  // Edit Ticket Modal
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTicket, setEditingTicket] = useState<any | null>(null);
+
+  // Reply Modal
+  const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
+  const [replyTicketId, setReplyTicketId] = useState<string | null>(null);
+  const [replyMessage, setReplyMessage] = useState('');
+
   useEffect(() => {
     loadTickets();
+  }, []);
+
+  // Realtime: refresh on any support_tickets change
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime-floor-support-tickets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => {
+        loadTickets();
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
 
   useEffect(() => {
@@ -79,6 +118,89 @@ export default function FloorManagerSupportPage() {
       console.error('Error loading tickets:', error);
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const handleClearFilters = () => {
+    setSearchTerm('');
+    setSelectedStatus('all');
+    setSelectedPriority('all');
+    setSelectedCategory('all');
+  };
+
+  const openNewTicket = () => {
+    setNewTicket({ title: '', description: '', priority: 'medium', category: 'general' });
+    setIsNewModalOpen(true);
+  };
+
+  const createTicket = async () => {
+    if (!newTicket.title.trim()) return;
+    try {
+      const payload: any = {
+        title: newTicket.title,
+        description: newTicket.description,
+        priority: newTicket.priority,
+        category: newTicket.category,
+        floor: user?.user_metadata?.floor ? Number(user.user_metadata.floor) : undefined,
+      };
+      await apiService.createSupportTicket(payload);
+      setIsNewModalOpen(false);
+      await loadTickets();
+    } catch (e) {
+      console.error('Failed to create ticket', e);
+    }
+  };
+
+  const openEdit = (t: SupportTicket) => {
+    setEditingTicket({
+      id: t.id,
+      title: t.title,
+      description: t.description,
+      status: t.status,
+      priority: t.priority,
+      category: t.category,
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editingTicket) return;
+    try {
+      await apiService.updateSupportTicket(editingTicket.id, {
+        title: editingTicket.title,
+        description: editingTicket.description,
+        status: editingTicket.status,
+        priority: editingTicket.priority,
+        category: editingTicket.category,
+      });
+      setIsEditModalOpen(false);
+      setEditingTicket(null);
+      await loadTickets();
+    } catch (e) {
+      console.error('Failed to update ticket', e);
+    }
+  };
+
+  const openReply = (ticketId: string) => {
+    setReplyTicketId(ticketId);
+    setReplyMessage('');
+    setIsReplyModalOpen(true);
+  };
+
+  const sendReply = async () => {
+    if (!replyTicketId || !replyMessage.trim()) return;
+    try {
+      // apiService.createTicketMessage expects { message, sender_id, is_internal }
+      await apiService.createTicketMessage(replyTicketId, {
+        message: replyMessage,
+        sender_id: user?.id,
+        is_internal: false,
+      });
+      setIsReplyModalOpen(false);
+      setReplyTicketId(null);
+      setReplyMessage('');
+    } catch (e) {
+      console.error('Failed to send reply', e);
     }
   };
 
@@ -191,7 +313,7 @@ export default function FloorManagerSupportPage() {
           <h1 className="text-3xl font-bold text-gray-900">Support Tickets</h1>
           <p className="text-gray-600">Manage customer support and floor issues</p>
         </div>
-        <Button className="bg-blue-600 hover:bg-blue-700">
+        <Button className="bg-blue-600 hover:bg-blue-700" onClick={openNewTicket}>
           <Plus className="w-4 h-4 mr-2" />
           New Ticket
         </Button>
@@ -311,7 +433,7 @@ export default function FloorManagerSupportPage() {
               <option value="Facility Issues">Facility Issues</option>
             </select>
 
-            <Button variant="outline" className="flex items-center">
+            <Button variant="outline" className="flex items-center" onClick={handleClearFilters}>
               <Filter className="w-4 h-4 mr-2" />
               Clear Filters
             </Button>
@@ -381,15 +503,15 @@ export default function FloorManagerSupportPage() {
                     </div>
                     
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => router.push(`/business-admin/support/tickets/${ticket.id}`)}>
                         <Eye className="w-4 h-4 mr-1" />
                         View
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => openEdit(ticket)}>
                         <Edit className="w-4 h-4 mr-1" />
                         Edit
                       </Button>
-                      <Button variant="outline" size="sm">
+                      <Button variant="outline" size="sm" onClick={() => openReply(ticket.id)}>
                         <Reply className="w-4 h-4 mr-1" />
                         Reply
                       </Button>
@@ -411,6 +533,98 @@ export default function FloorManagerSupportPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* New Ticket Modal */}
+      <Dialog open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>New Support Ticket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input placeholder="Title" value={newTicket.title} onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })} />
+            <Textarea placeholder="Description" value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <Select value={newTicket.priority} onValueChange={(v) => setNewTicket({ ...newTicket, priority: v as any })}>
+                <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={newTicket.category} onValueChange={(v) => setNewTicket({ ...newTicket, category: v })}>
+                <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General</SelectItem>
+                  <SelectItem value="order">Order</SelectItem>
+                  <SelectItem value="product">Product</SelectItem>
+                  <SelectItem value="appointments">Appointments</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewModalOpen(false)}>Cancel</Button>
+            <Button onClick={createTicket} disabled={!newTicket.title.trim()}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Ticket Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Ticket</DialogTitle>
+          </DialogHeader>
+          {editingTicket && (
+            <div className="space-y-3">
+              <Input value={editingTicket.title} onChange={(e) => setEditingTicket({ ...editingTicket, title: e.target.value })} />
+              <Textarea value={editingTicket.description} onChange={(e) => setEditingTicket({ ...editingTicket, description: e.target.value })} />
+              <div className="grid grid-cols-2 gap-3">
+                <Select value={editingTicket.priority} onValueChange={(v) => setEditingTicket({ ...editingTicket, priority: v })}>
+                  <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={editingTicket.status} onValueChange={(v) => setEditingTicket({ ...editingTicket, status: v })}>
+                  <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={!editingTicket?.title?.trim()}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reply Modal */}
+      <Dialog open={isReplyModalOpen} onOpenChange={setIsReplyModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reply to Ticket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea placeholder="Type your reply..." value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} rows={4} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReplyModalOpen(false)}>Cancel</Button>
+            <Button onClick={sendReply} disabled={!replyMessage.trim()}>Send Reply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

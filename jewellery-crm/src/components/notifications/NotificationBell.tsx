@@ -39,9 +39,11 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
 
     // Manager can see their store's notifications
     if (user.role === 'manager') {
+      const tenantId = (user as any)?.tenantId ?? (user as any)?.tenant?.id ?? (user as any)?.tenant;
+      const storeId = (user as any)?.storeId ?? (user as any)?.store?.id ?? (user as any)?.store;
       return notifications.filter(notification => 
-        notification.tenantId === user.tenant?.toString() &&
-        (!notification.storeId || notification.storeId === user.store?.toString())
+        (tenantId ? notification.tenantId === String(tenantId) : true) &&
+        (!notification.storeId || (storeId ? notification.storeId === String(storeId) : true))
       );
     }
 
@@ -56,7 +58,7 @@ export const NotificationBell: React.FC<NotificationBellProps> = ({
     if (user.role === 'tele_calling') {
       return notifications.filter(notification => 
         notification.userId === user.id.toString() ||
-        notification.tenantId === user.tenant?.toString()
+        notification.tenantId === String((user as any)?.tenantId ?? (user as any)?.tenant)
       );
     }
 

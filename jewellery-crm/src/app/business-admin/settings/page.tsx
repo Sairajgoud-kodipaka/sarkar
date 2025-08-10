@@ -74,27 +74,10 @@ import {
 } from '@/components/ui/alert-dialog';
 import { apiService } from '@/lib/api-service';
 import AddStoreModal from '@/components/stores/AddStoreModal';
+import AddTeamMemberModal from '@/components/team/AddTeamMemberModal';
 import { supabase } from '@/lib/supabase';
 import { toast } from 'sonner';
-
-// Align with apiService TeamMember shape (floor displayed as string like "Floor 1")
-interface TeamMember {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: 'active' | 'inactive' | 'on_leave';
-  avatar?: string;
-  lastActive?: string;
-  phone?: string;
-  floor?: string | number;
-  joinDate?: string;
-  performance?: {
-    sales: number;
-    customers: number;
-    rating: number;
-  };
-}
+import { TeamMember } from '@/types';
 
 interface Store {
   id: string;
@@ -644,7 +627,8 @@ export default function SettingsPage() {
                   <Users className="h-5 w-5" />
                   Team Members
                 </CardTitle>
-                <Button size="sm" onClick={handleAddMember}>
+                <AddTeamMemberModal hideTrigger onSuccess={fetchTeamMembersOnly} open={showAddModal} onOpenChange={setShowAddModal} />
+                <Button size="sm" onClick={handleAddMember} className="ml-2">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Member
                 </Button>
@@ -735,7 +719,7 @@ export default function SettingsPage() {
                   <Building2 className="h-5 w-5" />
                   Store Locations
                 </CardTitle>
-                <Button size="sm" onClick={() => setIsAddStoreOpen(true)}>
+                 <Button size="sm" onClick={() => setIsAddStoreOpen(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Add Store
                 </Button>
@@ -983,99 +967,7 @@ export default function SettingsPage() {
         }}
       />
 
-      {/* Add Member Modal */}
-      <Dialog open={showAddModal} onOpenChange={setShowAddModal}>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle>Add Team Member</DialogTitle>
-            <DialogDescription>
-              Add a new team member to your organization.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="grid gap-4 py-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="first-name">First Name *</Label>
-                <Input
-                  id="first-name"
-                  value={addFormData.first_name}
-                  onChange={(e) => setAddFormData({...addFormData, first_name: e.target.value})}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="last-name">Last Name *</Label>
-                <Input
-                  id="last-name"
-                  value={addFormData.last_name}
-                  onChange={(e) => setAddFormData({...addFormData, last_name: e.target.value})}
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="email">Email *</Label>
-              <Input
-                id="email"
-                type="email"
-                value={addFormData.email}
-                onChange={(e) => setAddFormData({...addFormData, email: e.target.value})}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password *</Label>
-              <Input
-                id="password"
-                type="password"
-                value={addFormData.password}
-                onChange={(e) => setAddFormData({...addFormData, password: e.target.value})}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="role">Role *</Label>
-              <Select value={addFormData.role} onValueChange={(value) => setAddFormData({...addFormData, role: value})}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select a role" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="business_admin">Business Admin</SelectItem>
-                  <SelectItem value="floor_manager">Floor Manager</SelectItem>
-                  <SelectItem value="sales_associate">Sales Associate</SelectItem>
-                  <SelectItem value="support_staff">Support Staff</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <Input
-                id="phone"
-                value={addFormData.phone}
-                onChange={(e) => setAddFormData({...addFormData, phone: e.target.value})}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="floor">Floor</Label>
-              <Select value={addFormData.floor.toString()} onValueChange={(value) => setAddFormData({...addFormData, floor: parseInt(value)})}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">Floor 1</SelectItem>
-                  <SelectItem value="2">Floor 2</SelectItem>
-                  <SelectItem value="3">Floor 3</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowAddModal(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleAddMemberSubmit} disabled={submitting}>
-              {submitting ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
-              Add Member
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {/* Add Member Modal replaced with shared component */}
 
       {/* Edit Member Modal */}
       <Dialog open={showEditModal} onOpenChange={setShowEditModal}>

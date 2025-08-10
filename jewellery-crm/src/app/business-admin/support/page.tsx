@@ -18,7 +18,6 @@ import {
   Trash2,
   User,
   Calendar,
-  Priority,
   Tag
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
@@ -70,99 +69,9 @@ interface SupportQuery {
   createdAt: string;
 }
 
-const mockTickets: Ticket[] = [
-  {
-    id: 'TKT-001',
-    title: 'Order delivery issue',
-    customer: {
-      name: 'Sarah Johnson',
-      email: 'sarah@example.com',
-      avatar: '/api/placeholder/40/40'
-    },
-    category: 'Order Issues',
-    priority: 'high',
-    status: 'in_progress',
-    assignedTo: 'John Smith',
-    createdAt: '2024-01-15',
-    lastUpdated: '2024-01-16',
-    description: 'Customer reported that their order #ORD-123 has not been delivered as expected.'
-  },
-  {
-    id: 'TKT-002',
-    title: 'Product quality concern',
-    customer: {
-      name: 'Michael Chen',
-      email: 'michael@example.com',
-      avatar: '/api/placeholder/40/40'
-    },
-    category: 'Product Issues',
-    priority: 'medium',
-    status: 'open',
-    assignedTo: 'Unassigned',
-    createdAt: '2024-01-16',
-    lastUpdated: '2024-01-16',
-    description: 'Customer is concerned about the quality of the diamond ring they received.'
-  },
-  {
-    id: 'TKT-003',
-    title: 'Payment processing error',
-    customer: {
-      name: 'Emily Davis',
-      email: 'emily@example.com',
-      avatar: '/api/placeholder/40/40'
-    },
-    category: 'Payment Issues',
-    priority: 'urgent',
-    status: 'open',
-    assignedTo: 'Unassigned',
-    createdAt: '2024-01-17',
-    lastUpdated: '2024-01-17',
-    description: 'Customer is unable to complete payment for their order.'
-  },
-  {
-    id: 'TKT-004',
-    title: 'Appointment rescheduling',
-    customer: {
-      name: 'David Wilson',
-      email: 'david@example.com',
-      avatar: '/api/placeholder/40/40'
-    },
-    category: 'Appointments',
-    priority: 'low',
-    status: 'resolved',
-    assignedTo: 'Lisa Brown',
-    createdAt: '2024-01-14',
-    lastUpdated: '2024-01-15',
-    description: 'Customer needs to reschedule their jewelry consultation appointment.'
-  }
-];
+// Mock data removed - using real API data instead
 
-const mockQueries: SupportQuery[] = [
-  {
-    id: 'Q-001',
-    question: 'What is your return policy for jewelry items?',
-    customer: 'Alice Cooper',
-    category: 'Returns & Refunds',
-    status: 'answered',
-    createdAt: '2024-01-15'
-  },
-  {
-    id: 'Q-002',
-    question: 'Do you offer international shipping?',
-    customer: 'Bob Johnson',
-    category: 'Shipping',
-    status: 'pending',
-    createdAt: '2024-01-16'
-  },
-  {
-    id: 'Q-003',
-    question: 'How can I get my jewelry appraised?',
-    customer: 'Carol Smith',
-    category: 'Services',
-    status: 'escalated',
-    createdAt: '2024-01-17'
-  }
-];
+// Mock queries removed - using real API data instead
 
 export default function SupportPage() {
   const { user } = useAuth();
@@ -248,12 +157,12 @@ export default function SupportPage() {
       const totalTickets = fetchedTickets.length;
       const resolutionRate = totalTickets > 0 ? Math.round((fetchedTickets.filter((t: any) => t.status === 'resolved' || t.status === 'closed').length / totalTickets) * 100) : 0;
       
-      setStats({
-        openTickets,
-        avgResponseTime: '2.3h', // Mock for now
-        resolutionRate: `${resolutionRate}%`,
-        totalTickets
-      });
+              setStats({
+          openTickets,
+          avgResponseTime: 'Calculating...', // Will be calculated from real data
+          resolutionRate: `${resolutionRate}%`,
+          totalTickets
+        });
     } catch (error) {
       console.error('Error fetching support data:', error);
     } finally {

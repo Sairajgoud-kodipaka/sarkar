@@ -3,6 +3,7 @@
 import React from 'react';
 import { NotificationProvider } from '@/hooks/useNotifications';
 import { NotificationManager } from '@/components/notifications';
+import { ThemeProvider } from './ThemeProvider';
 
 interface AppProvidersProps {
   children: React.ReactNode;
@@ -10,9 +11,11 @@ interface AppProvidersProps {
 
 export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   return (
-    <NotificationProvider>
-      {children}
-      <NotificationManager />
-    </NotificationProvider>
+    <ThemeProvider>
+      <NotificationProvider>
+        {children}
+        <NotificationManager />
+      </NotificationProvider>
+    </ThemeProvider>
   );
 }; 

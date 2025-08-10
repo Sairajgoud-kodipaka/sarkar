@@ -44,7 +44,7 @@ export const useScopedVisibility = (): ScopedVisibilityConfig => {
   } else if (user.role === 'manager') {
     userScope = {
       type: 'store',
-      filters: { store_id: user.store },
+      filters: { store_id: (user as any)?.storeId ?? (user as any)?.store },
       description: 'Access to store-specific data'
     };
   } else if (user.role === 'inhouse_sales' || user.role === 'tele_calling') {
@@ -63,8 +63,8 @@ export const useScopedVisibility = (): ScopedVisibilityConfig => {
 
   return {
     canAccessAllData: user.role === 'platform_admin' || user.role === 'business_admin',
-    canAccessStoreData: ['manager', 'platform_admin', 'business_admin'].includes(user.role),
-    canAccessOwnData: ['inhouse_sales', 'tele_calling', 'manager', 'platform_admin', 'business_admin'].includes(user.role),
+    canAccessStoreData: ['manager', 'platform_admin', 'business_admin'].includes(user.role as string),
+    canAccessOwnData: ['inhouse_sales', 'tele_calling', 'manager', 'platform_admin', 'business_admin'].includes(user.role as string),
     userScope
   };
 };

@@ -378,10 +378,10 @@ export default function AppointmentsPage() {
                           </div>
                           <div>
                             <div className="font-medium text-text-primary">
-                              {appointment.client_name || `Client #${appointment.client}`}
+                              {appointment.customer_name || `Client #${appointment.customer_id}`}
                             </div>
                             <div className="text-sm text-text-secondary">
-                              ID: {appointment.client}
+                              ID: {appointment.customer_id}
                             </div>
                           </div>
                         </div>
@@ -398,7 +398,7 @@ export default function AppointmentsPage() {
                       </td>
                       <td className="py-3 px-4">
                         <div className="max-w-xs">
-                          <div className="text-text-primary">{appointment.purpose}</div>
+                          <div className="text-text-primary">{appointment.notes || 'No purpose specified'}</div>
                           {appointment.notes && (
                             <div className="text-sm text-text-secondary truncate">
                               {appointment.notes}
@@ -410,7 +410,7 @@ export default function AppointmentsPage() {
                         <div className="flex items-center space-x-1">
                           <MapPin className="w-4 h-4 text-gray-400" />
                           <span className="text-text-secondary">
-                            {appointment.location || 'Not specified'}
+                            Floor {appointment.floor || 'Not specified'}
                           </span>
                         </div>
                       </td>

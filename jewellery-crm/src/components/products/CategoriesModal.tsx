@@ -94,7 +94,7 @@ export default function CategoriesModal({ isOpen, onClose, onSuccess }: Categori
         // Add store ID from authenticated user for new categories
         const categoryData = {
           ...formData,
-          store: user?.store
+          store: (user as any)?.storeId ?? (user as any)?.store ?? undefined
         };
         console.log('Category data to send:', categoryData);
         response = await apiService.createCategory(categoryData);

@@ -14,7 +14,7 @@ import { toast } from 'sonner';
 interface AddAnnouncementModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess?: (data: any) => void;
+  onSuccess?: () => void;
 }
 
 interface AnnouncementFormData {

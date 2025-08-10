@@ -53,7 +53,16 @@ export default function CreateEscalationModal({ onSuccess }: CreateEscalationMod
   const fetchCustomers = async () => {
     try {
       const response = await apiService.getCustomers();
-      setCustomers(response.data || []);
+      const raw: any = response.data;
+      const list: any[] = Array.isArray(raw) ? raw : (raw?.results ?? raw?.data ?? []);
+      const mapped: Client[] = list.map((c: any) => ({
+        id: Number(c.id),
+        first_name: c.first_name ?? c.firstName ?? '',
+        last_name: c.last_name ?? c.lastName ?? '',
+        email: c.email ?? '',
+        phone: c.phone ?? undefined,
+      }));
+      setCustomers(mapped);
     } catch (error) {
       console.error('Error fetching customers:', error);
       setCustomers([]);

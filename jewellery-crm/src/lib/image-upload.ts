@@ -35,8 +35,8 @@ export const uploadImage = async (file: File): Promise<UploadResult> => {
       console.error('❌ Upload error:', error);
       console.error('❌ Error details:', {
         message: error.message,
-        statusCode: error.statusCode,
-        error: error.error
+        name: error.name,
+        ...(error as any).statusCode && { statusCode: (error as any).statusCode }
       });
       
       // If bucket doesn't exist or access denied, return a clear message

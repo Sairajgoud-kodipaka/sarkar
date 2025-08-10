@@ -1,36 +1,55 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Sarkar CRM - Jewellery Management System
 
-## Getting Started
+A comprehensive CRM system built for jewellery businesses with Next.js, Supabase, and modern UI components.
 
-First, run the development server:
+## 🚀 Quick Deploy to Vercel
+
+### 1. Fork/Clone this repository
+
+### 2. Deploy to Vercel
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/yourusername/jewellery-crm)
+
+### 3. Set Environment Variables in Vercel
+Go to your Vercel project settings and add these environment variables:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+NEXT_PUBLIC_SUPABASE_URL=your_supabase_url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key
+NEXT_PUBLIC_APP_URL=https://your-app.vercel.app
+NEXT_PUBLIC_APP_NAME=Sarkar CRM
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### 4. Deploy!
+Your app will be automatically built and deployed.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 🛠️ Local Development
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm install
+npm run dev
+```
 
-## Learn More
+## 📱 Features
 
-To learn more about Next.js, take a look at the following resources:
+- **Multi-role Access**: Platform Admin, Business Admin, Floor Manager, Sales
+- **Customer Management**: Complete customer lifecycle management
+- **Sales Pipeline**: Kanban-style deal tracking
+- **Inventory Management**: Product catalog with image support
+- **Appointment Scheduling**: Calendar-based appointment system
+- **Support Tickets**: Customer support ticket management
+- **Analytics Dashboard**: Business insights and reporting
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🏗️ Tech Stack
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+- **Frontend**: Next.js 15, React 19, TypeScript
+- **UI Components**: Shadcn/ui, Tailwind CSS
+- **Backend**: Supabase (PostgreSQL, Auth, Storage)
+- **Deployment**: Vercel
 
-## Deploy on Vercel
+## 🔧 Configuration
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+The app automatically detects your environment and configures itself for production or development.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 📄 License
+
+MIT License - see LICENSE file for details.

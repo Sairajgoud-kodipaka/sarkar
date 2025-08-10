@@ -14,11 +14,14 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
-  role: 'business_admin' | 'floor_manager';
+  role: 'business_admin' | 'floor_manager' | 'platform_admin' | 'store_manager' | 'sales_team' | 'marketing_team' | 'telecaller';
   name: string;
   phone?: string;
   address?: string;
   floor?: number;
+  store?: number;
+  store_name?: string;
+  tenant?: number;
   is_active: boolean;
   created_at: string;
   updated_at: string;
@@ -53,6 +56,7 @@ export interface Client {
   status?: 'active' | 'inactive' | 'lead' | 'prospect' | 'customer' | 'vip';
   created_at?: string;
   updated_at?: string;
+  deleted_at?: string;
 
   // Extended profile
   first_name?: string;
@@ -79,6 +83,14 @@ export interface Client {
   preferred_style?: string;
   preferred_occasion?: string;
   budget?: string;
+  
+  // Additional fields for customer interests
+  customer_interests?: Array<{
+    products: Array<{ product: string }>;
+  }>;
+  
+  // Full name for display
+  full_name?: string;
 }
 
 export interface Product {
@@ -92,9 +104,17 @@ export interface Product {
   // Optional fields that might not exist in the database
   description?: string;
   stock_quantity?: number;
+  min_quantity?: number;
   status?: 'active' | 'inactive';
   created_at?: string;
   updated_at?: string;
+  // Additional fields for e-commerce
+  selling_price?: number;
+  discount_price?: number;
+  main_image_url?: string;
+  category_name?: string;
+  is_in_stock?: boolean;
+  scope?: 'global' | 'store';
 }
 
 export interface Sale {
@@ -182,7 +202,7 @@ export interface TeamMember {
   name: string;
   email: string;
   phone: string;
-  role: 'floor_manager' | 'sales_associate' | 'support_staff' | 'admin';
+  role: 'floor_manager' | 'sales_associate' | 'support_staff' | 'admin' | 'inhouse_sales' | 'marketing' | 'tele_caller' | 'manager' | 'sales' | 'support';
   floor: string;
   status: 'active' | 'inactive' | 'on_leave';
   avatar?: string;
@@ -2455,21 +2475,8 @@ class ApiService {
   // Escalation Methods
   async getEscalations(params?: any): Promise<ApiResponse<any[]>> {
     try {
-      // Mock escalations data
-      const mockEscalations = [
-        {
-          id: 1,
-          title: 'High-value customer complaint',
-          description: 'VIP customer unhappy with service',
-          status: 'open',
-          priority: 'urgent',
-          customer_name: 'VIP Customer',
-          assigned_to: null,
-          created_at: new Date().toISOString()
-        }
-      ];
-
-      return this.handleSupabaseResponse(mockEscalations);
+      // TODO: Implement real escalations API when table exists
+      return this.handleSupabaseResponse([]);
     } catch (error) {
       console.error('Error fetching escalations:', error);
       throw new Error('Failed to fetch escalations');
@@ -2561,19 +2568,8 @@ class ApiService {
   // Announcement Methods
   async getAnnouncements(): Promise<ApiResponse<any[]>> {
     try {
-      // Mock announcements data
-      const mockAnnouncements = [
-        {
-          id: 1,
-          title: 'New Product Launch',
-          content: 'We are excited to announce our new diamond collection',
-          type: 'announcement',
-          priority: 'high',
-          created_at: new Date().toISOString()
-        }
-      ];
-
-      return this.handleSupabaseResponse(mockAnnouncements);
+      // TODO: Implement real announcements API when table exists
+      return this.handleSupabaseResponse([]);
     } catch (error) {
       console.error('Error fetching announcements:', error);
       throw new Error('Failed to fetch announcements');
@@ -2582,18 +2578,8 @@ class ApiService {
 
   async getTeamMessages(): Promise<ApiResponse<any[]>> {
     try {
-      // Mock team messages
-      const mockMessages = [
-        {
-          id: 1,
-          sender_name: 'Manager',
-          message: 'Team meeting at 3 PM today',
-          type: 'message',
-          created_at: new Date().toISOString()
-        }
-      ];
-
-      return this.handleSupabaseResponse(mockMessages);
+      // TODO: Implement real team messages API when table exists
+      return this.handleSupabaseResponse([]);
     } catch (error) {
       console.error('Error fetching team messages:', error);
       throw new Error('Failed to fetch team messages');
@@ -2782,18 +2768,8 @@ class ApiService {
 
   async getClientAuditLogs(clientId: string): Promise<ApiResponse<any[]>> {
     try {
-      // Mock audit logs
-      const mockLogs = [
-        {
-          id: 1,
-          client_id: parseInt(clientId),
-          action: 'profile_updated',
-          details: 'Customer information updated',
-          created_at: new Date().toISOString()
-        }
-      ];
-
-      return this.handleSupabaseResponse(mockLogs);
+      // TODO: Implement real audit logs API when table exists
+      return this.handleSupabaseResponse([]);
     } catch (error) {
       console.error('Error fetching client audit logs:', error);
       throw new Error('Failed to fetch client audit logs');
@@ -2948,32 +2924,46 @@ class ApiService {
 
   async createStore(storeData: {
     name: string;
-    code: string;
     address: string;
-    city: string;
-    state: string;
+    city?: string;
+    state?: string;
     manager?: string; // team_members UUID
     is_active: boolean;
   }): Promise<ApiResponse<any>> {
     try {
       const payload: Record<string, any> = {
         name: storeData.name,
-        code: storeData.code,
         address: storeData.address,
-        city: storeData.city,
-        state: storeData.state,
         is_active: storeData.is_active,
       };
+
+      if (storeData.city) payload.city = storeData.city;
+      if (storeData.state) payload.state = storeData.state;
 
       if (storeData.manager) {
         payload.manager = storeData.manager;
       }
 
-      const { data, error } = await supabase
+      // First attempt: insert with whatever fields we have
+      let { data, error } = await supabase
         .from('stores')
         .insert(payload)
         .select()
         .single();
+
+      // Fallback: if schema doesn't have manager column, retry without it
+      if (error && storeData.manager && /manager/.test(error.message)) {
+        console.warn('[createStore] manager column missing in stores table, retrying without manager. Error:', error.message);
+        const retryPayload = { ...payload } as any;
+        delete retryPayload.manager;
+        const retry = await supabase
+          .from('stores')
+          .insert(retryPayload)
+          .select()
+          .single();
+        data = retry.data as any;
+        error = retry.error as any;
+      }
 
       if (error) throw new Error(error.message);
       return this.handleSupabaseResponse(data);
@@ -2985,13 +2975,12 @@ class ApiService {
 
   async updateStore(storeId: string, storeData: Partial<{
     name: string;
-    code: string;
     address: string;
-    city: string;
-    state: string;
-    timezone: string;
-    manager: string; // team_members UUID
-    is_active: boolean;
+    city?: string;
+    state?: string;
+    timezone?: string;
+    manager?: string; // team_members UUID
+    is_active?: boolean;
   }>): Promise<ApiResponse<any>> {
     try {
       const cleanUpdates: Record<string, any> = Object.fromEntries(
@@ -3178,6 +3167,115 @@ class ApiService {
     } catch (error) {
       console.error('Error creating notification:', error);
       throw new Error('Failed to create notification');
+    }
+  }
+
+  // Missing methods for product management
+  async importProducts(formData: FormData): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .insert([formData])
+        .select();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
+    }
+  }
+
+  async updateInventory(productId: string, inventoryData: any): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('products')
+        .update(inventoryData)
+        .eq('id', productId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
+    }
+  }
+
+  // Stock transfer methods
+  async getStockTransfers(): Promise<ApiResponse<any[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_transfers')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return { success: true, data: data || [] };
+    } catch (error: any) {
+      return { success: false, data: [], message: error.message };
+    }
+  }
+
+  async createStockTransfer(transferData: any): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_transfers')
+        .insert([transferData])
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
+    }
+  }
+
+  async approveStockTransfer(transferId: string): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_transfers')
+        .update({ status: 'approved' })
+        .eq('id', transferId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
+    }
+  }
+
+  async completeStockTransfer(transferId: string): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_transfers')
+        .update({ status: 'completed' })
+        .eq('id', transferId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
+    }
+  }
+
+  async cancelStockTransfer(transferId: string): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('stock_transfers')
+        .update({ status: 'cancelled' })
+        .eq('id', transferId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
     }
   }
 }

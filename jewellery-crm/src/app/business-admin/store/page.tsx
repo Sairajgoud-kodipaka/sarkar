@@ -69,94 +69,9 @@ interface StaffMember {
   salesThisMonth: number;
 }
 
-const mockStores: Store[] = [
-  {
-    id: '1',
-    name: 'Downtown Store',
-    address: '123 Main St, Downtown, NY 10001',
-    phone: '+1 (555) 123-4567',
-    email: 'downtown@jewelrystore.com',
-    manager: 'John Smith',
-    staffCount: 8,
-    status: 'active',
-    salesToday: 12500,
-    inventoryValue: 250000,
-    hours: 'Mon-Fri: 9AM-6PM, Sat: 10AM-5PM'
-  },
-  {
-    id: '2',
-    name: 'Mall Location',
-    address: '456 Shopping Mall, NY 10002',
-    phone: '+1 (555) 234-5678',
-    email: 'mall@jewelrystore.com',
-    manager: 'Lisa Brown',
-    staffCount: 6,
-    status: 'active',
-    salesToday: 8900,
-    inventoryValue: 180000,
-    hours: 'Mon-Sat: 10AM-9PM, Sun: 12PM-6PM'
-  },
-  {
-    id: '3',
-    name: 'Suburban Branch',
-    address: '789 Oak Ave, Suburb, NY 10003',
-    phone: '+1 (555) 345-6789',
-    email: 'suburban@jewelrystore.com',
-    manager: 'Mike Johnson',
-    staffCount: 4,
-    status: 'maintenance',
-    salesToday: 0,
-    inventoryValue: 120000,
-    hours: 'Mon-Fri: 9AM-6PM, Sat: 10AM-4PM'
-  }
-];
+// Mock stores removed - using real API data instead
 
-const mockStaff: StaffMember[] = [
-  {
-    id: '1',
-    name: 'John Smith',
-    role: 'Store Manager',
-    email: 'john@jewelrystore.com',
-    phone: '+1 (555) 123-4567',
-    avatar: '/api/placeholder/40/40',
-    status: 'active',
-    lastActive: '2 hours ago',
-    salesThisMonth: 45000
-  },
-  {
-    id: '2',
-    name: 'Lisa Brown',
-    role: 'Sales Associate',
-    email: 'lisa@jewelrystore.com',
-    phone: '+1 (555) 234-5678',
-    avatar: '/api/placeholder/40/40',
-    status: 'on_break',
-    lastActive: '30 minutes ago',
-    salesThisMonth: 32000
-  },
-  {
-    id: '3',
-    name: 'Mike Johnson',
-    role: 'Inventory Manager',
-    email: 'mike@jewelrystore.com',
-    phone: '+1 (555) 345-6789',
-    avatar: '/api/placeholder/40/40',
-    status: 'active',
-    lastActive: '1 hour ago',
-    salesThisMonth: 28000
-  },
-  {
-    id: '4',
-    name: 'Sarah Wilson',
-    role: 'Sales Associate',
-    email: 'sarah@jewelrystore.com',
-    phone: '+1 (555) 456-7890',
-    avatar: '/api/placeholder/40/40',
-    status: 'offline',
-    lastActive: '1 day ago',
-    salesThisMonth: 25000
-  }
-];
+// Mock staff removed - using real API data instead
 
 export default function StorePage() {
   const [stores, setStores] = useState<Store[]>([]);
@@ -168,20 +83,14 @@ export default function StorePage() {
       try {
         setLoading(true);
         
-        // For now, use a basic store setup since stores table might not exist yet
-        // You can create the stores table using the SQL commands provided earlier
-        const basicStore: Store = {
-          id: '1',
-          name: 'Main Jewelry Store',
-          address: '123 Jewelry Street, Mumbai',
-          manager: 'Store Manager',
-          status: 'active',
-          revenue: 2500000,
-          orders: 150,
-          customers: 85
-        };
-        
-        setStores([basicStore]);
+        // Load real stores from API
+        const storesResponse = await apiService.getStores();
+        if (storesResponse.success && storesResponse.data) {
+          const storesData = Array.isArray(storesResponse.data) ? storesResponse.data : [];
+          setStores(storesData);
+        } else {
+          setStores([]);
+        }
         
         // Load real staff from team_members
         const teamMembers = await apiService.getTeamMembers();
@@ -193,7 +102,10 @@ export default function StorePage() {
             floor: member.floor?.toString() || '1',
             status: member.status,
             email: member.email,
-            phone: member.phone || ''
+            phone: member.phone || '',
+            avatar: member.avatar || '',
+            lastActive: member.lastActive || new Date().toISOString(),
+            salesThisMonth: member.performance?.sales || 0
           }));
           
           setStaff(transformedStaff);

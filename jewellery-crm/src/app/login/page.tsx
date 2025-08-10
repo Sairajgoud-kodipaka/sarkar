@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Eye, EyeOff, Lock, Mail, Building2, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { auth } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,7 +19,7 @@ export default function LoginPage() {
   const [isSignUp, setIsSignUp] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [role, setRole] = useState<'platform_admin' | 'business_admin' | 'floor_manager' | 'inhouse_sales'>('inhouse_sales');
+  const [role, setRole] = useState<'business_admin' | 'floor_manager' | 'inhouse_sales'>('inhouse_sales');
   const [floor, setFloor] = useState(1);
   const [loginError, setLoginError] = useState('');
 
@@ -27,32 +28,27 @@ export default function LoginPage() {
     initialize();
   }, [initialize]);
 
+  const isRedirectingRef = useRef(false);
+
   useEffect(() => {
-    // If user is already authenticated, redirect based on role
-    if (user) {
-      const userRole = user.user_metadata?.role || 'floor_manager';
-      redirectBasedOnRole(userRole);
+    if (!isLoading && user && !isRedirectingRef.current) {
+      const userRole = user.user_metadata?.role as string | undefined;
+      if (userRole) {
+        isRedirectingRef.current = true;
+        redirectBasedOnRole(userRole);
+      }
     }
-  }, [user]);
+  }, [user, isLoading]);
+
+  const roleRoutes: Record<string, string> = {
+    business_admin: '/business-admin/dashboard',
+    sales_associate: '/sales/dashboard',
+    floor_manager: '/floor-manager/dashboard',
+    inhouse_sales: '/sales/dashboard',
+  };
 
   const redirectBasedOnRole = (userRole: string) => {
-    switch (userRole) {
-      case 'platform_admin':
-        router.push('/platform/dashboard');
-        break;
-      case 'business_admin':
-        router.push('/business-admin/dashboard');
-        break;
-      case 'floor_manager':
-        router.push('/floor-manager/dashboard');
-        break;
-      case 'inhouse_sales':
-        router.push('/sales/dashboard');
-        break;
-      default:
-        // Default to sales dashboard for unknown roles
-        router.push('/sales/dashboard');
-    }
+    router.replace(roleRoutes[userRole] || '/login');
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -67,14 +63,24 @@ export default function LoginPage() {
 
     try {
       const success = await login(email, password);
-      
-      if (success && user) {
-        const userRole = user.user_metadata?.role || 'floor_manager';
-        redirectBasedOnRole(userRole);
+      if (!success) {
+        setLoginError('Invalid credentials. Please try again.');
+        router.replace('/login');
+        return;
       }
+      // Fetch current user to get fresh metadata
+      const { user: freshUser } = await auth.getCurrentUser();
+      const freshRole = freshUser?.user_metadata?.role as string | undefined;
+      if (!freshRole) {
+        setLoginError('No role assigned. Please contact admin.');
+        router.replace('/login');
+        return;
+      }
+      redirectBasedOnRole(freshRole);
     } catch (error) {
       console.error('Login error:', error);
       setLoginError('An unexpected error occurred. Please try again.');
+      router.replace('/login');
     }
   };
 
@@ -103,14 +109,23 @@ export default function LoginPage() {
       };
 
       const success = await signUp(email, password, userData);
-      
-      if (success && user) {
-        const userRole = user.user_metadata?.role || 'floor_manager';
-        redirectBasedOnRole(userRole);
+      if (!success) {
+        setLoginError('Sign up failed. Please try again.');
+        router.replace('/login');
+        return;
       }
+      const { user: freshUser } = await auth.getCurrentUser();
+      const freshRole2 = freshUser?.user_metadata?.role as string | undefined;
+      if (!freshRole2) {
+        setLoginError('No role assigned. Please contact admin.');
+        router.replace('/login');
+        return;
+      }
+      redirectBasedOnRole(freshRole2);
     } catch (error) {
       console.error('Sign up error:', error);
       setLoginError('An unexpected error occurred. Please try again.');
+      router.replace('/login');
     }
   };
 
@@ -175,11 +190,10 @@ export default function LoginPage() {
                     <select
                       id="role"
                       value={role}
-                      onChange={(e) => setRole(e.target.value as 'platform_admin' | 'business_admin' | 'floor_manager' | 'inhouse_sales')}
+                      onChange={(e) => setRole(e.target.value as 'business_admin' | 'floor_manager' | 'inhouse_sales')}
                       className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                       disabled={isLoading}
                     >
-                      <option value="platform_admin">Platform Admin</option>
                       <option value="business_admin">Business Admin</option>
                       <option value="floor_manager">Floor Manager</option>
                       <option value="inhouse_sales">In-house Sales</option>
@@ -221,6 +235,7 @@ export default function LoginPage() {
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10"
                     disabled={isLoading}
+                    autoComplete={isSignUp ? 'email' : 'username'}
                   />
                 </div>
               </div>
@@ -239,6 +254,7 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 pr-10"
                     disabled={isLoading}
+                    autoComplete={isSignUp ? 'new-password' : 'current-password'}
                   />
                   <button
                     type="button"

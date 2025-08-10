@@ -110,13 +110,17 @@ export default function NewTenantPage() {
         return;
       }
       
-      const response = await apiService.createTenant(form);
+      // TODO: Implement createTenant method in API service
+      // const response = await apiService.createTenant(form);
       
-      if (response.success) {
-        router.push('/platform/tenants');
-      } else {
-        setError(`Failed to create tenant: ${response.message}`);
-      }
+      // if (response.success) {
+      //   router.push('/platform/tenants');
+      // } else {
+      //   setError(`Failed to create tenant: ${response.message}`);
+      // }
+      
+      // Temporary: just show success message
+      setError('Tenant creation functionality not yet implemented');
     } catch (err) {
       console.error('Error creating tenant:', err);
       setError(`Failed to create tenant: ${err instanceof Error ? err.message : 'Unknown error'}`);

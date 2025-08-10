@@ -17,9 +17,10 @@ import {
   Building2
 } from 'lucide-react';
 import Link from 'next/link';
+import { apiService } from '@/lib/api-service';
 
 interface PlatformUser {
-  id: number;
+  id: string;
   username: string;
   email: string;
   first_name: string;
@@ -40,19 +41,21 @@ export default function PlatformUsersPage() {
   useEffect(() => {
     const fetchUsers = async () => {
       try {
+        setLoading(true);
         const teamMembers = await apiService.getTeamMembers();
         
         if (teamMembers && teamMembers.length > 0) {
           const transformedUsers: PlatformUser[] = teamMembers.map((member: any) => ({
-            id: member.id || 1,
-            name: `${member.first_name} ${member.last_name}`,
+            id: member.id,
+            username: member.email.split('@')[0],
             email: member.email,
+            first_name: member.name.split(' ')[0] || '',
+            last_name: member.name.split(' ').slice(1).join(' ') || '',
             role: member.role,
-            status: member.status,
-            lastLogin: member.updated_at || member.created_at,
-            tenant: 'Jewelry Store', // Default value
-            permissions: ['read', 'write'], // Default permissions
-            createdAt: member.created_at
+            tenant_name: 'Jewelry Store', // Default value
+            is_active: member.status === 'active',
+            last_login: member.updated_at || member.created_at,
+            created_at: member.created_at
           }));
           
           setUsers(transformedUsers);
@@ -68,60 +71,6 @@ export default function PlatformUsersPage() {
     };
     
     fetchUsers();
-    
-    /* OLD MOCK DATA - REPLACED WITH REAL API
-    const mockUsers: PlatformUser[] = [
-      {
-        id: 1,
-        username: 'sairaj_admin',
-        email: 'sairaj@jewelrycrm.com',
-        first_name: 'Sairaj',
-        last_name: 'Admin',
-        role: 'platform_admin',
-        tenant_name: 'Platform Admin',
-        is_active: true,
-        last_login: '2025-08-02 10:30:00',
-        created_at: '2025-07-01'
-      },
-      {
-        id: 2,
-        username: 'abhinav_admin',
-        email: 'abhinav@jewelrycrm.com',
-        first_name: 'Abhinav',
-        last_name: 'Admin',
-        role: 'platform_admin',
-        tenant_name: 'Platform Admin',
-        is_active: true,
-        last_login: '2025-08-02 09:15:00',
-        created_at: '2025-07-01'
-      },
-      {
-        id: 3,
-        username: 'mandeep_business',
-        email: 'mandeep@jewelrycrm.com',
-        first_name: 'Mandeep',
-        last_name: 'Business',
-        role: 'business_admin',
-        tenant_name: 'Mandeep Jewelries',
-        is_active: true,
-        last_login: '2025-08-02 08:45:00',
-        created_at: '2025-07-21'
-      },
-      {
-        id: 4,
-        username: 'chinmay_business',
-        email: 'chinmay@jewelrycrm.com',
-        first_name: 'Chinmay',
-        last_name: 'Business',
-        role: 'business_admin',
-        tenant_name: 'Chinmay Jewelries',
-        is_active: true,
-        last_login: '2025-08-01 16:20:00',
-        created_at: '2025-07-21'
-      }
-    ];
-    
-    */ // End of commented mock data
   }, []);
 
   const filteredUsers = users.filter(user =>

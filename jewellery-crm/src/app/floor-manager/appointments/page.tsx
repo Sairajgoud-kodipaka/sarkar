@@ -491,7 +491,7 @@ export default function FunctionalAppointmentsPage() {
                     >
                       <Trash2 className="w-4 h-4" />
                       Delete
-              </Button>
+                    </Button>
             </div>
           </div>
         </CardContent>

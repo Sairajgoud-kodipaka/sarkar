@@ -8,10 +8,31 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Calendar, Clock, User, MapPin, FileText, CheckCircle, XCircle, AlertCircle } from "lucide-react";
-import { Appointment, apiService } from "@/lib/api-service";
+import { apiService } from "@/lib/api-service";
+
+interface AppointmentDetails {
+  id: number | string;
+  status: 'scheduled' | 'confirmed' | 'in_progress' | 'completed' | 'cancelled' | 'no_show' | 'rescheduled';
+  title?: string;
+  date: string;
+  time: string;
+  duration: number;
+  purpose?: string;
+  notes?: string;
+  outcome_notes?: string;
+  location?: string;
+  client: string | number;
+  created_at?: string;
+  updated_at?: string;
+  reminder_sent?: boolean;
+  requires_follow_up?: boolean;
+  follow_up_date?: string;
+  follow_up_notes?: string;
+  next_action?: string;
+}
 
 interface AppointmentDetailModalProps {
-  appointment: Appointment | null;
+  appointment: AppointmentDetails | null;
   open: boolean;
   onClose: () => void;
 }
@@ -168,8 +189,7 @@ export function AppointmentDetailModal({ appointment, open, onClose }: Appointme
       const response = await apiService.rescheduleAppointment(
         appointment.id.toString(),
         rescheduleData.newDate,
-        rescheduleData.newTime,
-        rescheduleData.reason
+        rescheduleData.newTime
       );
       if (response.success) {
         alert('Appointment rescheduled successfully!');
@@ -196,7 +216,7 @@ export function AppointmentDetailModal({ appointment, open, onClose }: Appointme
       notes: appointment.notes || '',
       location: appointment.location || '',
       duration: appointment.duration || 60,
-      client: appointment.client
+      client: String(appointment.client)
     });
     setShowEditModal(true);
   };

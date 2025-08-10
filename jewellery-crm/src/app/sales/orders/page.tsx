@@ -14,6 +14,10 @@ import {
   Package,
   CheckCircle
 } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { apiService } from '@/lib/api-service';
+import { toast } from 'sonner';
 
 interface Order {
   id: number;
@@ -34,6 +38,13 @@ export default function SalesOrdersPage() {
   const [loading, setLoading] = useState(true);
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<string>('all');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newOrder, setNewOrder] = useState({
+    customer_name: '',
+    customer_phone: '',
+    total_amount: 0,
+    status: 'confirmed' as Order['status'],
+  });
 
   useEffect(() => {
     fetchOrders();
@@ -51,13 +62,14 @@ export default function SalesOrdersPage() {
           id: order.id,
           order_number: `ORD-${order.id.toString().padStart(4, '0')}`,
           customer_name: order.customer_name,
+          customer_phone: order.customer_phone || 'N/A',
           total_amount: order.total_amount,
           status: order.status,
+          order_date: order.created_at || order.order_date || new Date().toISOString(),
           created_at: order.created_at,
-          items: order.order_items || [],
+          items_count: order.order_items ? order.order_items.length : 0,
           payment_status: 'paid', // Default value
-          delivery_date: null, // Default value
-          notes: order.notes || ''
+          delivery_date: undefined, // Default value
         }));
         
         setOrders(transformedOrders);
@@ -65,53 +77,38 @@ export default function SalesOrdersPage() {
         setOrders([]);
       }
       
-      /* OLD MOCK DATA - REPLACED WITH REAL API
-      const mockOrders: Order[] = [
-        {
-          id: 1,
-          order_number: 'ORD-2024-001',
-          customer_name: 'Priya Sharma',
-          customer_phone: '+91 98765 43210',
-          total_amount: 75000,
-          status: 'confirmed',
-          payment_status: 'paid',
-          order_date: '2024-01-15',
-          delivery_date: '2024-01-25',
-          items_count: 3,
-          created_at: '2024-01-15'
-        },
-        {
-          id: 2,
-          order_number: 'ORD-2024-002',
-          customer_name: 'Rajesh Kumar',
-          customer_phone: '+91 98765 43211',
-          total_amount: 120000,
-          status: 'in_progress',
-          payment_status: 'partial',
-          order_date: '2024-01-16',
-          delivery_date: '2024-01-30',
-          items_count: 2,
-          created_at: '2024-01-16'
-        },
-        {
-          id: 3,
-          order_number: 'ORD-2024-003',
-          customer_name: 'Anita Patel',
-          customer_phone: '+91 98765 43212',
-          total_amount: 250000,
-          status: 'delivered',
-          payment_status: 'paid',
-          order_date: '2024-01-10',
-          delivery_date: '2024-01-20',
-          items_count: 5,
-          created_at: '2024-01-10'
-        }
-      ];
-      */ // End of commented mock data
+      // Mock data removed - using real API data
     } catch (error) {
       console.error('Error fetching orders:', error);
+      toast.error('Failed to load orders');
+      setOrders([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateOrder = async () => {
+    try {
+      if (!newOrder.customer_name || !newOrder.customer_phone || !newOrder.total_amount) {
+        toast.error('Please fill all required fields');
+        return;
+      }
+      const resp = await apiService.createOrder({
+        customer_name: newOrder.customer_name,
+        total_amount: newOrder.total_amount,
+        status: newOrder.status,
+        notes: '',
+      } as any);
+      if (resp.success) {
+        toast.success('Order created');
+        setIsCreateOpen(false);
+        fetchOrders();
+      } else {
+        toast.error(resp.message || 'Failed to create order');
+      }
+    } catch (e) {
+      console.error('Create order error', e);
+      toast.error('Failed to create order');
     }
   };
 
@@ -165,6 +162,9 @@ export default function SalesOrdersPage() {
   const pendingOrders = orders.filter(order => order.status === 'pending').length;
   const completedOrders = orders.filter(order => order.status === 'delivered').length;
 
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isDetailsOpen, setIsDetailsOpen] = useState(false);
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -173,7 +173,7 @@ export default function SalesOrdersPage() {
           <h1 className="text-3xl font-bold text-gray-900">Orders</h1>
           <p className="text-gray-600">Manage customer orders and deliveries</p>
         </div>
-        <Button>
+        <Button onClick={() => setIsCreateOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Create Order
         </Button>
@@ -269,6 +269,33 @@ export default function SalesOrdersPage() {
         </CardContent>
       </Card>
 
+      {/* Create Order Modal */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Order</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium">Customer Name</label>
+              <Input value={newOrder.customer_name} onChange={(e) => setNewOrder({ ...newOrder, customer_name: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Customer Phone</label>
+              <Input value={newOrder.customer_phone} onChange={(e) => setNewOrder({ ...newOrder, customer_phone: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Total Amount</label>
+              <Input type="number" value={newOrder.total_amount} onChange={(e) => setNewOrder({ ...newOrder, total_amount: Number(e.target.value) })} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateOrder}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Orders List */}
       <Card>
         <CardHeader>
@@ -328,7 +355,14 @@ export default function SalesOrdersPage() {
                         </Badge>
                       </div>
                     </div>
-                    <Button variant="outline" size="sm">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedOrder(order);
+                        setIsDetailsOpen(true);
+                      }}
+                    >
                       View Details
                     </Button>
                   </div>
@@ -346,6 +380,26 @@ export default function SalesOrdersPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Order Details Dialog */}
+      <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Order Details</DialogTitle>
+            <DialogDescription>Review order information</DialogDescription>
+          </DialogHeader>
+          {selectedOrder && (
+            <div className="space-y-2 text-sm">
+              <div className="font-semibold text-base">{selectedOrder.order_number}</div>
+              <div>Customer: {selectedOrder.customer_name}</div>
+              {selectedOrder.customer_phone && (<div>Phone: {selectedOrder.customer_phone}</div>)}
+              <div>Amount: {formatCurrency(selectedOrder.total_amount)}</div>
+              <div>Status: <span className={`inline-block px-2 py-0.5 rounded ${getStatusColor(selectedOrder.status)}`}>{getStatusDisplayName(selectedOrder.status)}</span></div>
+              {selectedOrder.delivery_date && (<div>Delivery: {formatDate(selectedOrder.delivery_date)}</div>)}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

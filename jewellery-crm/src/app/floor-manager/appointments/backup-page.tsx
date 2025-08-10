@@ -113,70 +113,7 @@ export default function FloorManagerAppointmentsPage() {
         setAppointments([]);
       }
       
-      /* OLD MOCK DATA - REPLACED WITH REAL API
-      const mockAppointments: Appointment[] = [
-        {
-          id: 1,
-          customer_name: 'Priya Sharma',
-          customer_email: 'priya.sharma@email.com',
-          customer_phone: '+91 98765 43210',
-          appointment_date: '2024-01-20',
-          appointment_time: '10:00 AM',
-          duration: 60,
-          type: 'consultation',
-          status: 'confirmed',
-          assigned_to: 'Floor 1 Manager',
-          floor: 'Floor 1',
-          notes: 'Interested in gold necklace collection',
-          total_value: 75000
-        },
-        {
-          id: 2,
-          customer_name: 'Rajesh Kumar',
-          customer_email: 'rajesh.kumar@email.com',
-          customer_phone: '+91 87654 32109',
-          appointment_date: '2024-01-20',
-          appointment_time: '2:00 PM',
-          duration: 90,
-          type: 'fitting',
-          status: 'scheduled',
-          assigned_to: 'Floor 1 Manager',
-          floor: 'Floor 1',
-          notes: 'Diamond ring fitting for anniversary',
-          total_value: 150000
-        },
-        {
-          id: 3,
-          customer_name: 'Anita Patel',
-          customer_email: 'anita.patel@email.com',
-          customer_phone: '+91 76543 21098',
-          appointment_date: '2024-01-21',
-          appointment_time: '11:30 AM',
-          duration: 45,
-          type: 'delivery',
-          status: 'scheduled',
-          assigned_to: 'Floor 1 Manager',
-          floor: 'Floor 1',
-          notes: 'Platinum earrings delivery',
-          total_value: 45000
-        },
-        {
-          id: 4,
-          customer_name: 'Sunita Verma',
-          customer_email: 'sunita.verma@email.com',
-          customer_phone: '+91 65432 10987',
-          appointment_date: '2024-01-19',
-          appointment_time: '3:00 PM',
-          duration: 60,
-          type: 'follow_up',
-          status: 'completed',
-          assigned_to: 'Floor 1 Manager',
-          floor: 'Floor 1',
-          notes: 'Follow up on wedding collection',
-          total_value: 200000
-        }
-      ];
-      */ // End of commented mock data
+      // Mock data removed - using real API data
     } catch (error) {
       console.error('Error fetching appointments:', error);
     } finally {

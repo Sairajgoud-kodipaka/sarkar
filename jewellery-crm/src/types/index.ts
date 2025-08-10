@@ -226,6 +226,20 @@ export interface ProductCategory {
 }
 
 /**
+ * Category interface for component compatibility
+ */
+export interface Category {
+  id: string;
+  name: string;
+  description?: string;
+  image?: string;
+  isActive?: boolean;
+  sortOrder?: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
+/**
  * Product information for jewellery items
  */
 export interface Product {
@@ -241,18 +255,32 @@ export interface Product {
   salePrice?: number;
   costPrice: number;
   
+  // Additional pricing fields for compatibility
+  price?: number;
+  selling_price?: number;
+  discount_price?: number;
+  current_price?: number;
+  
   // Jewellery specifications
   specifications: ProductSpecifications;
   
   // Media
   images: ProductImage[];
   has360View: boolean;
+  main_image_url?: string;
   
   // Variants (size, metal, stone)
   variants: ProductVariant[];
   
   // Inventory
   inventory: ProductInventory[];
+  stock_quantity?: number;
+  min_quantity?: number;
+  quantity?: number;
+  
+  // Store information
+  store_name?: string;
+  scope?: 'global' | 'store';
   
   // Metadata
   tags: string[];
@@ -267,6 +295,8 @@ export interface Product {
   createdAt: Date;
   updatedAt: Date;
   createdBy: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 /**
@@ -775,6 +805,191 @@ export interface NotificationBatch {
   totalCount: number;
   unreadCount: number;
   hasMore: boolean;
+}
+
+// ================================
+// TEAM MANAGEMENT TYPES
+// ================================
+
+/**
+ * Unified Team Member interface for the entire system
+ * This consolidates all the different TeamMember definitions across components
+ */
+export interface TeamMember {
+  id: string;
+  name: string;
+  first_name?: string;
+  last_name?: string;
+  email: string;
+  phone?: string;
+  role: 'floor_manager' | 'sales_associate' | 'support_staff' | 'admin' | 'inhouse_sales' | 'marketing' | 'tele_caller' | 'manager' | 'sales' | 'support';
+  floor?: string | number;
+  status: 'active' | 'inactive' | 'on_leave' | 'present' | 'absent';
+  avatar?: string;
+  joinDate?: string;
+  address?: string;
+  store?: number;
+  performance?: {
+    sales: number;
+    customers: number;
+    rating: number;
+    target?: number;
+  };
+  lastActive?: string;
+  is_active?: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+// ================================
+// ADDITIONAL TYPES FOR COMPONENT COMPATIBILITY
+// ================================
+
+/**
+ * Sale interface for sales tracking
+ */
+export interface Sale {
+  id: number;
+  customer_id: number;
+  customer_name: string;
+  amount: number;
+  date: string;
+  floor: number;
+  created_by: string;
+  created_at: string;
+}
+
+/**
+ * Visit interface for customer visits
+ */
+export interface Visit {
+  id: number;
+  customer_id: number;
+  customer_name: string;
+  floor: number;
+  date: string;
+  interest: string;
+  created_at: string;
+}
+
+/**
+ * Dashboard stats interface
+ */
+export interface DashboardStats {
+  visits_today: number;
+  visits_this_week: number;
+  visits_this_month: number;
+  sales_today: number;
+  sales_this_week: number;
+  sales_this_month: number;
+  total_customers: number;
+  total_products: number;
+}
+
+/**
+ * Floor data interface
+ */
+export interface FloorData {
+  floor: number;
+  customers: Customer[];
+  visits: Visit[];
+  sales: Sale[];
+}
+
+/**
+ * Dashboard data interface
+ */
+export interface DashboardData {
+  visitors: {
+    today: number;
+    this_week: number;
+    this_month: number;
+  };
+  sales: {
+    today: number;
+    this_week: number;
+    this_month: number;
+  };
+  floor_customers: Array<{
+    floor: number;
+    customers: Array<{
+      name: string;
+      number: string;
+      interest: string;
+    }>;
+  }>;
+}
+
+/**
+ * Admin customer interface
+ */
+export interface AdminCustomer {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  floor: string;
+  status: 'active' | 'inactive' | 'prospect' | 'vip';
+  totalSpent: number;
+  visitCount: number;
+  lastVisit: string;
+  preferredCategory: string;
+  journeyStage: 'awareness' | 'consideration' | 'purchase' | 'loyalty' | 'advocacy';
+  assignedTo: string;
+  notes: string;
+  tags: string[];
+}
+
+/**
+ * Client interface for extended customer data
+ */
+export interface Client {
+  id: number;
+  // Core
+  name: string;
+  phone: string;
+  interest?: string;
+  floor: number;
+  visited_date: string;
+  assigned_to?: string;
+  notes?: string;
+  status?: 'active' | 'inactive' | 'lead' | 'prospect' | 'customer' | 'vip';
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string;
+
+  // Extended profile
+  first_name?: string;
+  last_name?: string;
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  date_of_birth?: string;
+  anniversary_date?: string;
+  community?: string;
+  mother_tongue?: string;
+  reason_for_visit?: string;
+  lead_source?: string;
+  age_of_end_user?: string;
+  saving_scheme?: string;
+  catchment_area?: string;
+  next_follow_up?: string;
+  summary_notes?: string;
+
+  // Preferences
+  preferred_metal?: string;
+  preferred_style?: string;
+  preferred_occasion?: string;
+  budget?: string;
+  
+  // Additional fields
+  customer_interests?: Array<{
+    products: Array<{ product: string }>;
+  }>;
+  
+  full_name?: string;
 }
 
 // All types are already exported above as individual exports

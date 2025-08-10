@@ -6,7 +6,7 @@ import { AuthWrapper } from '@/components/auth/AuthWrapper';
 
 export default function SalesLayout({ children }: { children: React.ReactNode }) {
   return (
-    <AuthWrapper requiredRole="inhouse_sales">
+    <AuthWrapper requiredRole={["sales_associate", "inhouse_sales"]}>
       <div className="main-layout">
         <aside className="sidebar">
           <Sidebar />

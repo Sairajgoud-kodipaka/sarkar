@@ -11,24 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { apiService } from '@/lib/api-service';
 import DeleteConfirmationModal from '@/components/ui/DeleteConfirmationModal';
-
-interface TeamMember {
-  id: number; // Team member ID
-  user_id?: number; // User ID
-  username: string;
-  email: string;
-  first_name: string;
-  last_name: string;
-  role: string;
-  name: string;
-  phone?: string;
-  address?: string;
-  tenant?: number;
-  store?: number;
-  is_active: boolean;
-  created_at: string;
-  updated_at: string;
-}
+import { TeamMember } from '@/types';
 
 interface CreateTeamMemberData {
   username: string;
@@ -64,7 +47,7 @@ export default function TeamSettingsPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creatingMember, setCreatingMember] = useState(false);
-  const [deletingMember, setDeletingMember] = useState<number | null>(null);
+  const [deletingMember, setDeletingMember] = useState<string | null>(null);
   const [editingMember, setEditingMember] = useState<TeamMember | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
   const [createFormData, setCreateFormData] = useState<CreateTeamMemberData>({
@@ -89,17 +72,10 @@ export default function TeamSettingsPage() {
   const fetchTeamMembers = async () => {
     try {
       setLoading(true);
-      const response = await apiService.getTeamMembers();
-      console.log('Team members response:', response);
-      if (response.success) {
-        const data = response.data as any;
-        const teamMembersData = Array.isArray(data) ? data : data.results || [];
-        console.log('Team members data:', teamMembersData);
-        console.log('Team members store IDs:', teamMembersData.map((m: any) => ({ id: m.id, name: m.first_name, store: m.store })));
-        setTeamMembers(teamMembersData);
-      } else {
-        setError('Failed to load team members');
-      }
+      const teamMembersData = await apiService.getTeamMembers();
+      console.log('Team members data:', teamMembersData);
+      console.log('Team members data:', teamMembersData.map((m: any) => ({ id: m.id, name: m.name, role: m.role })));
+      setTeamMembers(teamMembersData);
     } catch (error) {
       console.error('Failed to fetch team members:', error);
       setError('Failed to load team members');
@@ -137,7 +113,7 @@ export default function TeamSettingsPage() {
       setCreatingMember(true);
       
       // Validate required fields
-      if (!createFormData.username || !createFormData.email || !createFormData.password || !createFormData.role) {
+      if (!createFormData.username || !createFormData.email || !createFormData.first_name || !createFormData.last_name || !createFormData.password || !createFormData.role) {
         setError('Please fill in all required fields');
         return;
       }
@@ -193,9 +169,14 @@ export default function TeamSettingsPage() {
       setCreatingMember(true);
       setError(null);
 
+      // Split the name into first and last name if not already separated
+      const nameParts = editingMember.name.split(' ');
+      const firstName = editingMember.first_name || nameParts[0] || '';
+      const lastName = editingMember.last_name || nameParts.slice(1).join(' ') || '';
+
       const updateData = {
-        first_name: editingMember.first_name,
-        last_name: editingMember.last_name,
+        first_name: firstName,
+        last_name: lastName,
         email: editingMember.email,
         role: editingMember.role,
         phone: editingMember.phone || '',
@@ -226,7 +207,7 @@ export default function TeamSettingsPage() {
     }
   };
 
-  const handleDeleteMember = async (memberId: number) => {
+  const handleDeleteMember = async (memberId: string) => {
     const member = teamMembers.find(m => m.id === memberId);
     if (member) {
       setMemberToDelete(member);
@@ -285,10 +266,7 @@ export default function TeamSettingsPage() {
   };
 
   const getFullName = (member: TeamMember) => {
-    if (member?.first_name && member?.last_name) {
-      return `${member.first_name} ${member.last_name}`;
-    }
-    return member?.name || member?.username || 'Unknown';
+    return member?.name || 'Unknown';
   };
 
   const filteredTeamMembers = (teamMembers || []).filter(member => {
@@ -358,7 +336,7 @@ export default function TeamSettingsPage() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="last_name">Last Name</Label>
+                  <Label htmlFor="last_name">Last Name *</Label>
                   <Input
                     id="last_name"
                     value={createFormData.last_name}
@@ -501,25 +479,14 @@ export default function TeamSettingsPage() {
                 </div>
               )}
               
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit_first_name">First Name *</Label>
-                  <Input
-                    id="edit_first_name"
-                    value={editingMember?.first_name || ''}
-                    onChange={(e) => setEditingMember(prev => prev ? {...prev, first_name: e.target.value} : null)}
-                    placeholder="Enter first name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="edit_last_name">Last Name</Label>
-                  <Input
-                    id="edit_last_name"
-                    value={editingMember?.last_name || ''}
-                    onChange={(e) => setEditingMember(prev => prev ? {...prev, last_name: e.target.value} : null)}
-                    placeholder="Enter last name"
-                  />
-                </div>
+              <div>
+                <Label htmlFor="edit_name">Full Name *</Label>
+                <Input
+                  id="edit_name"
+                  value={editingMember?.name || ''}
+                  onChange={(e) => setEditingMember(prev => prev ? {...prev, name: e.target.value} : null)}
+                  placeholder="Enter full name"
+                />
               </div>
               
               <div>
@@ -535,7 +502,7 @@ export default function TeamSettingsPage() {
               
               <div>
                 <Label htmlFor="edit_role">Role *</Label>
-                <Select value={editingMember?.role || ''} onValueChange={(value) => setEditingMember(prev => prev ? {...prev, role: value} : null)}>
+                <Select value={editingMember?.role || ''} onValueChange={(value) => setEditingMember(prev => prev ? {...prev, role: value as TeamMember['role']} : null)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select a role" />
                   </SelectTrigger>
@@ -683,7 +650,7 @@ export default function TeamSettingsPage() {
                       })()}
                     </td>
                     <td className="px-4 py-2">
-                      {getStatusBadge(member.is_active)}
+                      {getStatusBadge(member.is_active ?? false)}
                     </td>
                     <td className="px-4 py-2 flex gap-2">
                       <Button 

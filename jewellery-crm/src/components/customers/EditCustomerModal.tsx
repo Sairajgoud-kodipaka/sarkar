@@ -83,7 +83,7 @@ export function EditCustomerModal({ open, onClose, customer, onCustomerUpdated }
       setSaving(true);
       console.log('Updating customer data:', formData);
       
-      const response = await apiService.updateClient(customer.id, formData);
+      const response = await apiService.updateClient(String(customer.id), formData);
       
       if (response.success) {
         console.log('Customer updated successfully:', response.data);

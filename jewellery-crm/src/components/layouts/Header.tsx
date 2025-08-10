@@ -20,7 +20,6 @@ import { cn } from '@/lib/utils';
 import { 
   Search,
   Menu,
-  Plus,
   MessageSquare,
   Calendar,
   Users,
@@ -29,6 +28,7 @@ import {
   HelpCircle,
   Sun,
   Moon,
+  Monitor,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,44 +43,13 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/useAuth';
 import { NotificationBell } from '@/components/notifications';
+import { useTheme } from '@/components/providers/ThemeProvider';
 
 interface HeaderProps {
   onSidebarToggle?: () => void;
   showSidebarToggle?: boolean;
   className?: string;
 }
-
-/**
- * Quick action items for the plus menu
- */
-const quickActions = [
-  {
-    title: 'Add Customer',
-    href: '/customers/new',
-    icon: Users,
-    description: 'Create a new customer profile',
-  },
-  {
-    title: 'Book Appointment',
-    href: '/appointments/new',
-    icon: Calendar,
-    description: 'Schedule an appointment',
-  },
-  {
-    title: 'Add Product',
-    href: '/products/new',
-    icon: Package,
-    description: 'Add new product to catalog',
-  },
-  {
-    title: 'Send WhatsApp',
-    href: '/whatsapp/compose',
-    icon: MessageSquare,
-    description: 'Send WhatsApp message',
-  },
-];
-
-
 
 /**
  * Header Component
@@ -96,8 +65,7 @@ export function Header({
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const { user, logout } = useAuth();
-
-
+  const { theme, setTheme, isDark } = useTheme();
 
   /**
    * Handle search submission
@@ -132,8 +100,9 @@ export function Header({
 
   return (
     <header className={cn(
-      'sticky top-0 z-40 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
+      'sticky top-0 z-20 w-full bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60',
       'border-b border-border',
+      'relative', // Ensure proper positioning context
       className
     )}>
       <div className="flex h-16 items-center justify-between px-6">
@@ -202,33 +171,6 @@ export function Header({
 
         {/* Right Section */}
         <div className="flex items-center space-x-2">
-          {/* Quick Actions Menu */}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon" className="relative">
-                <Plus className="h-4 w-4" />
-                <span className="sr-only">Quick actions</span>
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-64">
-              <DropdownMenuLabel>Quick Actions</DropdownMenuLabel>
-              <DropdownMenuSeparator />
-              {quickActions.map((action) => (
-                <DropdownMenuItem key={action.href} asChild>
-                  <a href={action.href} className="flex items-start space-x-3 p-3">
-                    <action.icon className="h-5 w-5 mt-0.5 text-muted-foreground" />
-                    <div className="space-y-1">
-                      <div className="font-medium">{action.title}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {action.description}
-                      </div>
-                    </div>
-                  </a>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
           {/* Notifications */}
           <NotificationBell />
 
@@ -242,16 +184,16 @@ export function Header({
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme('light')}>
                 <Sun className="mr-2 h-4 w-4" />
                 Light
               </DropdownMenuItem>
-              <DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setTheme('dark')}>
                 <Moon className="mr-2 h-4 w-4" />
                 Dark
               </DropdownMenuItem>
-              <DropdownMenuItem>
-                <Settings className="mr-2 h-4 w-4" />
+              <DropdownMenuItem onClick={() => setTheme('system')}>
+                <Monitor className="mr-2 h-4 w-4" />
                 System
               </DropdownMenuItem>
             </DropdownMenuContent>
@@ -289,7 +231,12 @@ export function Header({
                 <Avatar className="h-8 w-8">
                   <AvatarImage src={undefined} />
                   <AvatarFallback className="bg-primary text-primary-foreground">
-                    {user?.name?.split(' ').map(n => n[0]).join('')}
+                    {(() => {
+                      const fn = (user as any)?.first_name || (user as any)?.firstName || '';
+                      const ln = (user as any)?.last_name || (user as any)?.lastName || '';
+                      const display = `${fn} ${ln}`.trim() || (user as any)?.email || 'U';
+                      return display.split(' ').map((n: string) => n[0]).join('');
+                    })()}
                   </AvatarFallback>
                 </Avatar>
               </Button>
@@ -298,7 +245,7 @@ export function Header({
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">
-                    {user?.name}
+                    {((user as any)?.first_name || (user as any)?.firstName || '') + ' ' + ((user as any)?.last_name || (user as any)?.lastName || '')}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground">
                     {user?.email}

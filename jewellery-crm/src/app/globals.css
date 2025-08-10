@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&display=swap');
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -140,6 +139,152 @@
   --sidebar-ring: oklch(0.556 0 0);
 }
 
+/* Improved dark mode styles */
+.dark .bg-sidebar {
+  background: oklch(0.145 0 0);
+  border-right: 1px solid oklch(1 0 0 / 10%);
+}
+
+.dark .text-sidebar-foreground {
+  color: oklch(0.985 0 0);
+}
+
+.dark .hover\:bg-sidebar-accent:hover {
+  background: oklch(0.269 0 0);
+}
+
+.dark .border-sidebar-border {
+  border-color: oklch(1 0 0 / 10%);
+}
+
+/* Sidebar hover text color fix */
+.sidebar-nav-item:hover .group-hover\:text-white,
+.sidebar-nav-item .group:hover .group-hover\:text-white {
+  color: white !important;
+}
+
+/* Ensure sidebar is properly fixed */
+#app-sidebar {
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  height: 100vh !important;
+  z-index: 30 !important;
+}
+
+/* Sidebar text color overrides */
+#app-sidebar {
+  color: white !important;
+}
+
+#app-sidebar span,
+#app-sidebar div,
+#app-sidebar button {
+  color: white !important;
+}
+
+#app-sidebar .text-sidebar-foreground {
+  color: white !important;
+}
+
+#app-sidebar .text-sidebar-foreground\/70 {
+  color: rgba(255, 255, 255, 0.8) !important;
+}
+
+/* Main content positioning */
+.main-content-with-sidebar {
+  margin-left: 0 !important; /* Remove margin-based positioning */
+  min-height: 100vh;
+  position: relative;
+  width: calc(100vw - 240px); /* Account for sidebar width */
+  left: 240px; /* Position to the right of sidebar */
+}
+
+/* Ensure proper layering and prevent overlap */
+#app-sidebar {
+  position: fixed !important;
+  left: 0 !important;
+  top: 0 !important;
+  height: 100vh !important;
+  z-index: 30 !important;
+  width: 240px !important;
+  overflow-y: auto;
+}
+
+/* Main content area positioning */
+.main-content-with-sidebar {
+  margin-left: 0 !important;
+  min-height: 100vh;
+  position: relative;
+  width: calc(100vw - 240px);
+  left: 240px;
+  z-index: 10;
+  background: var(--background);
+}
+
+/* Ensure main content doesn't overlap sidebar */
+.main-content-with-sidebar > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* Header positioning */
+header {
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 20 !important;
+  background: var(--background) !important;
+  width: 100%;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Mobile responsive */
+@media (max-width: 1023px) {
+  .main-content-with-sidebar {
+    margin-left: 0 !important;
+    width: 100vw;
+    left: 0;
+  }
+  
+  #app-sidebar {
+    width: 240px !important;
+    transform: translateX(-100%);
+  }
+  
+  #app-sidebar[data-open="true"] {
+    transform: translateX(0);
+  }
+}
+
+/* Sidebar hover effects */
+.sidebar-item-hover {
+  transition: all 0.2s ease-in-out;
+}
+
+.sidebar-item-hover:hover {
+  background: var(--sidebar-accent);
+}
+
+.sidebar-item-hover:hover span {
+  color: white !important;
+}
+
+/* More specific hover rules */
+.sidebar-nav-item:hover .sidebar-item-hover span,
+.sidebar-nav-item .sidebar-item-hover:hover span,
+.sidebar-nav-item .group:hover .sidebar-item-hover span {
+  color: white !important;
+}
+
+/* Ensure sidebar navigation items have proper hover states */
+.sidebar-nav-item .sidebar-item-hover:hover {
+  background: var(--sidebar-accent);
+}
+
+.sidebar-nav-item .sidebar-item-hover:hover span {
+  color: white !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
@@ -176,6 +321,37 @@
     overflow-y: auto;
   }
   
+  /* Fixed sidebar utilities */
+  .sidebar-fixed {
+    position: fixed;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 30;
+  }
+  
+  .content-with-sidebar {
+    margin-left: 240px; /* 15rem = 240px */
+    min-height: 100vh;
+  }
+  
+  /* Improved sidebar hover effects */
+  .sidebar-item {
+    transition: all 0.2s ease-in-out;
+  }
+  
+  .sidebar-item:hover {
+    background: var(--sidebar-accent);
+    color: white;
+    transform: translateX(4px);
+  }
+  
+  .sidebar-item.active {
+    background: var(--primary);
+    color: var(--primary-foreground);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  }
+  
   /* Mobile responsive */
   @media (max-width: 768px) {
     .main-layout {
@@ -188,6 +364,10 @@
     
     .sidebar {
       display: none;
+    }
+    
+    .content-with-sidebar {
+      margin-left: 0;
     }
   }
   

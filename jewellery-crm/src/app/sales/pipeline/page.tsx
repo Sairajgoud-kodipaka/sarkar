@@ -14,7 +14,10 @@ import {
   Target
 } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
+import { DragEvent, useCallback } from 'react';
 import { toast } from 'sonner';
+import { AddDealModal } from '@/components/pipeline/AddDealModal';
+import { DealDetailModal } from '@/components/pipeline/DealDetailModal';
 
 interface PipelineDeal {
   id: number;
@@ -39,6 +42,9 @@ export default function SalesPipelinePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedStage, setSelectedStage] = useState<string>('all');
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [selectedDealId, setSelectedDealId] = useState<string | null>(null);
+  const [isDealOpen, setIsDealOpen] = useState(false);
 
   useEffect(() => {
     fetchPipelineData();
@@ -68,43 +74,7 @@ export default function SalesPipelinePage() {
     }
   };
 
-  // OLD MOCK DATA - REPLACED WITH REAL API
-  /*
-  const mockDeals: PipelineDeal[] = [
-        {
-          id: 1,
-          title: 'Gold Necklace Sale',
-          customer_name: 'Priya Sharma',
-          amount: 75000,
-          stage: 'qualified',
-          probability: 75,
-          expected_close_date: '2024-01-15',
-          assigned_to: 'Sales Team',
-          created_at: '2024-01-01'
-        },
-        {
-          id: 2,
-          title: 'Diamond Ring Purchase',
-          customer_name: 'Rajesh Kumar',
-          amount: 120000,
-          stage: 'negotiation',
-          probability: 90,
-          expected_close_date: '2024-01-20',
-          assigned_to: 'Sales Team',
-          created_at: '2024-01-05'
-        },
-        {
-          id: 3,
-          title: 'Wedding Collection',
-          customer_name: 'Anita Patel',
-          amount: 250000,
-          stage: 'proposal',
-          probability: 60,
-          expected_close_date: '2024-02-01',
-          assigned_to: 'Sales Team',
-          created_at: '2024-01-10'
-  ];
-  */
+  // Mock data removed - using real API data
 
   const getStageColor = (stage: string) => {
     switch (stage) {
@@ -179,7 +149,7 @@ export default function SalesPipelinePage() {
           <h1 className="text-3xl font-bold text-gray-900">Sales Pipeline</h1>
           <p className="text-gray-600">Track and manage your sales opportunities</p>
           </div>
-        <Button>
+        <Button onClick={() => setIsAddOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Deal
         </Button>
@@ -268,73 +238,77 @@ export default function SalesPipelinePage() {
         </CardContent>
             </Card>
 
-      {/* Deals List */}
+      {/* Kanban Board */}
       <Card>
         <CardHeader>
-          <CardTitle>Pipeline Deals</CardTitle>
-          <CardDescription>
-            {filteredDeals.length} deals found
-          </CardDescription>
+          <CardTitle>Pipeline Board</CardTitle>
+          <CardDescription>Visualize deals by stage</CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-              <span className="ml-2">Loading pipeline...</span>
-        </div>
-          ) : (
-            <div className="space-y-4">
-              {filteredDeals.map((deal) => (
-                <div
-                  key={deal.id}
-                  className="flex items-center justify-between p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                >
-                  <div className="flex items-center space-x-4">
-                    <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
-                      <DollarSign className="w-5 h-5 text-blue-600" />
-      </div>
-                  <div>
-                      <h3 className="font-semibold text-gray-900">{deal.title}</h3>
-                      <div className="flex items-center space-x-4 text-sm text-gray-600">
-                        <span className="flex items-center">
-                          <User className="w-4 h-4 mr-1" />
-                          {deal.customer_name}
-                        </span>
-                        <span className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          Close: {formatDate(deal.expected_close_date)}
-                        </span>
+          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            {['lead','qualified','proposal','negotiation'].map((stageKey) => (
+              <div
+                key={stageKey}
+                className="bg-gray-50 rounded-lg p-3 border"
+                onDragOver={(e) => e.preventDefault()}
+                onDrop={async (e) => {
+                  const dealId = e.dataTransfer.getData('text/deal-id');
+                  if (!dealId) return;
+                  try {
+                    await apiService.updatePipelineStage(dealId, { stage: stageKey });
+                    fetchPipelineData();
+                  } catch (err) {
+                    console.error('Failed to move deal', err);
+                  }
+                }}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="font-semibold capitalize">{stageKey.replace('_',' ')}</div>
+                  <Badge className={getStageColor(stageKey)}>{filteredDeals.filter(d=>d.stage===stageKey).length}</Badge>
+                </div>
+                <div className="space-y-2 min-h-[120px]">
+                  {filteredDeals.filter(d => d.stage === stageKey).map(deal => (
+                    <div
+                      key={deal.id}
+                      className="bg-white rounded-md border p-3 shadow-sm hover:shadow cursor-pointer"
+                      draggable
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData('text/deal-id', String(deal.id));
+                      }}
+                      onClick={() => { setSelectedDealId(String(deal.id)); setIsDealOpen(true); }}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium text-sm truncate">{deal.title}</div>
+                        <div className="text-xs text-gray-600">{formatCurrency(deal.amount)}</div>
                       </div>
-                      <p className="text-sm text-gray-500 mt-1">
-                        Probability: {deal.probability}% • Assigned to: {deal.assigned_to}
-                      </p>
+                      <div className="text-xs text-gray-500 mt-1 flex items-center gap-2">
+                        <User className="w-3 h-3" /> {deal.customer_name}
+                      </div>
+                      <div className="text-[11px] text-gray-400 mt-0.5">Close: {formatDate(deal.expected_close_date)}</div>
                     </div>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="text-right">
-                      <p className="font-semibold text-gray-900">{formatCurrency(deal.amount)}</p>
-                      <Badge className={getStageColor(deal.stage)}>
-                        {getStageDisplayName(deal.stage)}
-                      </Badge>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      View Details
-                    </Button>
-                  </div>
+                  ))}
+                  {filteredDeals.filter(d => d.stage === stageKey).length === 0 && (
+                    <div className="text-xs text-gray-400">No deals</div>
+                  )}
                 </div>
-              ))}
-              
-              {filteredDeals.length === 0 && !loading && (
-                <div className="text-center py-8">
-                  <TrendingUp className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No deals found</h3>
-                  <p className="text-gray-600">Try adjusting your filters or add a new deal</p>
-                </div>
-            )}
+              </div>
+            ))}
           </div>
-          )}
         </CardContent>
-        </Card>
+      </Card>
+
+        {/* Modals */}
+        <AddDealModal
+          open={isAddOpen}
+          onClose={() => setIsAddOpen(false)}
+          onDealCreated={() => fetchPipelineData()}
+        />
+        <DealDetailModal
+          open={isDealOpen}
+          onClose={() => setIsDealOpen(false)}
+          dealId={selectedDealId}
+          onDealUpdated={() => fetchPipelineData()}
+        />
     </div>
   );
 }

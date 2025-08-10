@@ -30,9 +30,10 @@ export function TrashModal({ open, onClose, onCustomerRestored }: TrashModalProp
       const response = await apiService.getTrashedClients();
       
       if (response.success && response.data) {
-        const customersData = Array.isArray(response.data) 
-          ? response.data 
-          : response.data.results || response.data.data || [];
+        const raw: any = response.data as any;
+        const customersData = Array.isArray(raw)
+          ? raw
+          : (raw?.results ?? raw?.data ?? []);
         setTrashedCustomers(customersData);
       }
     } catch (error) {

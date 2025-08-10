@@ -113,8 +113,8 @@ export default function ProductImageModal({ product, open, onOpenChange }: Produ
             <div>
               <h4 className="font-medium mb-2">Tags</h4>
               <div className="flex flex-wrap gap-2">
-                <Badge variant="outline">{product.category || 'Jewellery'}</Badge>
-                <Badge variant="outline">{product.type || 'Accessory'}</Badge>
+                <Badge variant="outline">{(product as any).category || (product as any).category_name || 'Jewellery'}</Badge>
+                <Badge variant="outline">{(product as any).type || 'Accessory'}</Badge>
                 <Badge variant={getStatusColor(product.status)}>
                   {product.status || 'active'}
                 </Badge>
@@ -125,14 +125,14 @@ export default function ProductImageModal({ product, open, onOpenChange }: Produ
             <div>
               <h4 className="font-medium mb-2">Product Information</h4>
               <div className="space-y-2 text-sm">
-                <div><span className="font-medium">Stock Quantity:</span> {product.stock_quantity || 'N/A'}</div>
+                <div><span className="font-medium">Stock Quantity:</span> {(product as any).stock_quantity ?? 'N/A'}</div>
                 <div><span className="font-medium">Status:</span> 
                   <Badge variant={getStatusColor(product.status)} className="ml-2">
                     {product.status || 'active'}
                   </Badge>
                 </div>
-                <div><span className="font-medium">Created:</span> {formatDate(product.created_at)}</div>
-                <div><span className="font-medium">Last Updated:</span> {formatDate(product.updated_at)}</div>
+                 <div><span className="font-medium">Created:</span> {formatDate((product as any).created_at)}</div>
+                <div><span className="font-medium">Last Updated:</span> {formatDate((product as any).updated_at)}</div>
               </div>
             </div>
 

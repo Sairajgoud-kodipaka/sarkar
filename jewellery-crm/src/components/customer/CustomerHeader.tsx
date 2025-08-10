@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
-import { Category } from '@/lib/api-service';
+import { Category } from '@/types';
 import { getTenantConfig } from '@/lib/tenant-config';
 import { Search, ShoppingBag, User, Menu, X } from 'lucide-react';
 

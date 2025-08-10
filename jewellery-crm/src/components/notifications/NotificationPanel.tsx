@@ -11,6 +11,7 @@ import { Notification, NotificationType, NotificationPriority } from '@/types';
 import { formatDistanceToNow } from 'date-fns';
 import { notificationSound } from '@/lib/notification-sound';
 import DeleteConfirmationModal from '@/components/ui/DeleteConfirmationModal';
+import { useRouter } from 'next/navigation';
 
 interface NotificationPanelProps {
   onClose: () => void;
@@ -66,6 +67,7 @@ const getPriorityText = (priority: NotificationPriority) => {
 };
 
 export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose }) => {
+  const router = useRouter();
   const { state, actions } = useNotifications();
   const { user, isAuthenticated, isHydrated } = useAuth();
   const panelRef = useRef<HTMLDivElement>(null);
@@ -74,7 +76,6 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose })
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [deleteAllModalOpen, setDeleteAllModalOpen] = useState(false);
   const [notificationToDelete, setNotificationToDelete] = useState<Notification | null>(null);
-
   // Initialize volume from notification sound
   useEffect(() => {
     setVolume(notificationSound.getVolume());
@@ -91,9 +92,11 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose })
 
     // Manager can see their store's notifications
     if (user.role === 'manager') {
+      const tenantId = (user as any)?.tenantId ?? (user as any)?.tenant?.id ?? (user as any)?.tenant;
+      const storeId = (user as any)?.storeId ?? (user as any)?.store?.id ?? (user as any)?.store;
       return notifications.filter(notification => 
-        notification.tenantId === user.tenant?.toString() &&
-        (!notification.storeId || notification.storeId === user.store?.toString())
+        (tenantId ? notification.tenantId === String(tenantId) : true) &&
+        (!notification.storeId || (storeId ? notification.storeId === String(storeId) : true))
       );
     }
 
@@ -108,7 +111,7 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose })
     if (user.role === 'tele_calling') {
       return notifications.filter(notification => 
         notification.userId === user.id.toString() ||
-        notification.tenantId === user.tenant?.toString()
+        notification.tenantId === String((user as any)?.tenantId ?? (user as any)?.tenant)
       );
     }
 
@@ -201,9 +204,17 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose })
       await actions.markAsRead(notification.id);
     }
 
-    // Navigate to action URL if available
+    // Navigate to action URL if available using Next.js router
     if (notification.actionUrl) {
-      window.location.href = notification.actionUrl;
+      try {
+        // Use Next.js router for client-side navigation
+        router.push(notification.actionUrl);
+        onClose(); // Close the notification panel after navigation
+      } catch (error) {
+        console.error('Navigation error:', error);
+        // Fallback to window.location if router fails
+        window.location.href = notification.actionUrl;
+      }
     }
   };
 

@@ -9,7 +9,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiService, SalesPipeline, Client } from "@/lib/api-service";
+import { apiService, Client } from "@/lib/api-service";
+import { Deal } from "@/types";
 import { Edit, Calendar, DollarSign, User, Building, ArrowRight, CheckCircle, XCircle } from "lucide-react";
 import { useScopedVisibility } from '@/lib/scoped-visibility';
 
@@ -21,7 +22,7 @@ interface DealDetailModalProps {
 }
 
 export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDetailModalProps) {
-  const [deal, setDeal] = useState<SalesPipeline | null>(null);
+  const [deal, setDeal] = useState<Deal | null>(null);
   const [client, setClient] = useState<Client | null>(null);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -76,20 +77,21 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
       
       if (response.success && response.data) {
         setDeal(response.data);
-        setFormData({
-          title: response.data.title,
-          expected_value: response.data.expected_value.toString(),
-          probability: response.data.probability.toString(),
-          stage: response.data.stage,
-          expected_close_date: response.data.expected_close_date || '',
-          notes: response.data.notes || '',
-          next_action: response.data.next_action || '',
-          next_action_date: response.data.next_action_date || '',
-        });
+          setFormData({
+            title: (response.data as any).title,
+            expected_value: ((response.data as any).expected_value ?? (response.data as any).value ?? 0).toString(),
+            probability: String((response.data as any).probability ?? 0),
+            stage: (response.data as any).stage,
+            expected_close_date: (response.data as any).expected_close_date ?? (response.data as any).expectedCloseDate ?? '',
+            notes: (response.data as any).notes || '',
+            next_action: (response.data as any).next_action || '',
+            next_action_date: (response.data as any).next_action_date || '',
+          });
         
-        // Fetch client details
-        if (response.data.client) {
-          const clientResponse = await apiService.getClient(response.data.client.toString());
+        // Fetch client details (support both client_id and client fields)
+        const clientIdRaw = (response.data as any).client_id ?? (response.data as any).client;
+        if (clientIdRaw !== undefined && clientIdRaw !== null) {
+          const clientResponse = await apiService.getClient(String(clientIdRaw));
           if (clientResponse.success && clientResponse.data) {
             setClient(clientResponse.data);
           }
@@ -400,7 +402,7 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
                     <div>
                       <Label className="text-sm font-medium text-gray-600">Expected Value</Label>
                       <p className="text-lg font-semibold text-green-600">
-                        {formatCurrency(deal.expected_value)}
+                        {formatCurrency(((deal as any).expected_value ?? (deal as any).value) as number)}
                       </p>
                     </div>
                     <div>
@@ -462,26 +464,26 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
                   <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                     <div>
                       <Label className="text-sm font-medium text-gray-600">Created</Label>
-                      <p className="text-sm">{formatDate(deal.created_at)}</p>
+                      <p className="text-sm">{formatDate(((deal as any).created_at ?? (deal as any).createdAt) as string)}</p>
                     </div>
                     <CheckCircle className="w-5 h-5 text-green-500" />
                   </div>
                   
-                  {deal.expected_close_date && (
+                  {((deal as any).expected_close_date ?? (deal as any).expectedCloseDate) && (
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
                         <Label className="text-sm font-medium text-gray-600">Expected Close Date</Label>
-                        <p className="text-sm">{formatDate(deal.expected_close_date)}</p>
+                        <p className="text-sm">{formatDate(((deal as any).expected_close_date ?? (deal as any).expectedCloseDate) as string)}</p>
                       </div>
                       <Calendar className="w-5 h-5 text-blue-500" />
                     </div>
                   )}
                   
-                  {deal.actual_close_date && (
+                  {((deal as any).actual_close_date ?? (deal as any).closedAt) && (
                     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div>
                         <Label className="text-sm font-medium text-gray-600">Actual Close Date</Label>
-                        <p className="text-sm">{formatDate(deal.actual_close_date)}</p>
+                        <p className="text-sm">{formatDate(((deal as any).actual_close_date ?? (deal as any).closedAt) as string)}</p>
                       </div>
                       {deal.stage === 'closed_won' ? (
                         <CheckCircle className="w-5 h-5 text-green-500" />
@@ -514,14 +516,14 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
                 </div>
               </Card>
 
-              {deal.next_action && (
+              {((deal as any).next_action ?? (deal as any).nextAction) && (
                 <Card className="p-4">
                   <h3 className="text-lg font-semibold mb-4">Next Action</h3>
                   <div className="space-y-2">
-                    <p className="text-gray-700">{deal.next_action}</p>
-                    {deal.next_action_date && (
+                    <p className="text-gray-700">{String((deal as any).next_action ?? (deal as any).nextAction)}</p>
+                    {((deal as any).next_action_date ?? (deal as any).nextFollowUp) && (
                       <p className="text-sm text-gray-500">
-                        Due: {formatDate(deal.next_action_date)}
+                        Due: {formatDate(String((deal as any).next_action_date ?? (deal as any).nextFollowUp))}
                       </p>
                     )}
                   </div>

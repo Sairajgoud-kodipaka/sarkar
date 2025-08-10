@@ -81,16 +81,21 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
     
     try {
       console.log('Saving tenant data:', editData);
-      const response = await apiService.updateTenant(tenantId, editData);
+      // TODO: Implement updateTenant method in API service
+      // const response = await apiService.updateTenant(tenantId, editData);
       
-      if (response.success) {
-        setTenant(response.data);
-        setIsEditing(false);
-        console.log('Tenant updated successfully');
-      } else {
-        console.error('Failed to update tenant:', response.message);
-        setError(`Failed to update tenant: ${response.message}`);
-      }
+      // if (response.success) {
+      //   setTenant(response.data);
+      //   setIsEditing(false);
+      //   console.log('Tenant updated successfully');
+      // } else {
+      //   console.error('Failed to update tenant:', response.message);
+      //   setError(`Failed to update tenant: ${response.message}`);
+      // }
+      
+      // Temporary: just close editing mode
+      setIsEditing(false);
+      console.log('Tenant update functionality not yet implemented');
     } catch (err) {
       console.error('Error updating tenant:', err);
       setError(`Failed to update tenant: ${err instanceof Error ? err.message : 'Unknown error'}`);

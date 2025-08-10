@@ -22,6 +22,9 @@ import {
   Reply
 } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Textarea } from '@/components/ui/textarea';
+import { toast } from 'sonner';
 
 interface SupportTicket {
   id: number;
@@ -47,6 +50,28 @@ export default function SalesSupportPage() {
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [newTicket, setNewTicket] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
+    category: 'general',
+    status: 'open' as 'open' | 'in_progress' | 'resolved' | 'closed',
+    floor: 1,
+    assigned_to: '' as string | undefined,
+  });
+  const [activeTicket, setActiveTicket] = useState<SupportTicket | null>(null);
+  const [isViewOpen, setIsViewOpen] = useState(false);
+  const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isReplyOpen, setIsReplyOpen] = useState(false);
+  const [replyMessage, setReplyMessage] = useState('');
+  const [editData, setEditData] = useState({
+    title: '',
+    description: '',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
+    status: 'open' as 'open' | 'in_progress' | 'resolved' | 'closed',
+    category: 'general'
+  });
 
   useEffect(() => {
     fetchTickets();
@@ -59,22 +84,24 @@ export default function SalesSupportPage() {
       const response = await apiService.getSupportTickets();
       
       if (response.success && response.data) {
-        // Transform API data to match component interface
+        // Transform API data to match component interface used in this page
         const transformedTickets: SupportTicket[] = response.data.map((ticket: any) => ({
           id: ticket.id,
-          title: ticket.title,
-          description: ticket.description,
+          ticket_number: `TKT-${String(ticket.id).padStart(4, '0')}`,
+          subject: ticket.title || ticket.subject || 'Support Ticket',
+          description: ticket.description || '',
           status: ticket.status,
           priority: ticket.priority,
           category: ticket.category || 'general',
           customer_name: ticket.customer?.name || ticket.customer_name || 'Unknown Customer',
           customer_email: ticket.customer?.email || '',
           customer_phone: ticket.customer?.phone || '',
-          assigned_to: ticket.assigned_to_member ? 
-            `${ticket.assigned_to_member.first_name} ${ticket.assigned_to_member.last_name}` : 
-            'Unassigned',
-          created_at: ticket.created_at,
-          updated_at: ticket.updated_at
+          assigned_to: ticket.assigned_to_member 
+            ? `${ticket.assigned_to_member.first_name} ${ticket.assigned_to_member.last_name}` 
+            : 'Unassigned',
+          created_date: ticket.created_at,
+          updated_date: ticket.updated_at,
+          floor: ticket.floor ? `Floor ${ticket.floor}` : 'Floor 1',
         }));
         
         setTickets(transformedTickets);
@@ -82,81 +109,41 @@ export default function SalesSupportPage() {
         setTickets([]);
       }
       
-      /* OLD MOCK DATA - REPLACED WITH REAL API
-      const mockTickets: SupportTicket[] = [
-        {
-          id: 1,
-          ticket_number: 'TKT-2024-001',
-          subject: 'Product Information Request',
-          description: 'Customer needs detailed information about gold necklace collection',
-          customer_name: 'Priya Sharma',
-          customer_email: 'priya.sharma@email.com',
-          customer_phone: '+91 98765 43210',
-          created_date: '2024-01-15',
-          updated_date: '2024-01-16',
-          priority: 'medium',
-          status: 'in_progress',
-          category: 'product',
-          assigned_to: 'Sales Team',
-          floor: 'Floor 1',
-          response_time: '2 hours'
-        },
-        {
-          id: 2,
-          ticket_number: 'TKT-2024-002',
-          subject: 'Payment Issue',
-          description: 'Customer facing payment gateway error during checkout',
-          customer_name: 'Rajesh Kumar',
-          customer_email: 'rajesh.kumar@email.com',
-          customer_phone: '+91 87654 32109',
-          created_date: '2024-01-16',
-          updated_date: '2024-01-16',
-          priority: 'high',
-          status: 'open',
-          category: 'technical',
-          assigned_to: 'Sales Team',
-          floor: 'Floor 1',
-          response_time: '1 hour'
-        },
-        {
-          id: 3,
-          ticket_number: 'TKT-2024-003',
-          subject: 'Order Status Update',
-          description: 'Customer wants to know delivery status of their order',
-          customer_name: 'Anita Patel',
-          customer_email: 'anita.patel@email.com',
-          customer_phone: '+91 76543 21098',
-          created_date: '2024-01-17',
-          updated_date: '2024-01-17',
-          priority: 'low',
-          status: 'resolved',
-          category: 'general',
-          assigned_to: 'Sales Team',
-          floor: 'Floor 1',
-          response_time: '30 minutes'
-        },
-        {
-          id: 4,
-          ticket_number: 'TKT-2024-004',
-          subject: 'Billing Query',
-          description: 'Customer has questions about invoice and payment terms',
-          customer_name: 'Sunita Verma',
-          customer_email: 'sunita.verma@email.com',
-          customer_phone: '+91 65432 10987',
-          created_date: '2024-01-18',
-          updated_date: '2024-01-18',
-          priority: 'medium',
-          status: 'open',
-          category: 'billing',
-          assigned_to: 'Sales Team',
-          floor: 'Floor 1'
-        }
-      ];
-      */ // End of commented mock data
+      // Mock data removed - using real API data
     } catch (error) {
       console.error('Error fetching tickets:', error);
+      toast.error('Failed to load support tickets');
+      setTickets([]);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCreateTicket = async () => {
+    try {
+      if (!newTicket.title || !newTicket.description) {
+        toast.error('Please fill all required fields');
+        return;
+      }
+      const resp = await apiService.createSupportTicket({
+        title: newTicket.title,
+        description: newTicket.description,
+        priority: newTicket.priority,
+        category: newTicket.category,
+        status: newTicket.status,
+        floor: newTicket.floor,
+        assigned_to: newTicket.assigned_to,
+      });
+      if (resp.success) {
+        toast.success('Ticket created');
+        setIsCreateOpen(false);
+        fetchTickets();
+      } else {
+        toast.error(resp.message || 'Failed to create ticket');
+      }
+    } catch (e) {
+      console.error('Create ticket error', e);
+      toast.error('Failed to create ticket');
     }
   };
 
@@ -239,7 +226,7 @@ export default function SalesSupportPage() {
           <h1 className="text-3xl font-bold text-gray-900">Sales Support</h1>
           <p className="text-gray-600">Manage customer support tickets</p>
         </div>
-        <Button>
+        <Button onClick={() => setIsCreateOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Create Ticket
         </Button>
@@ -343,6 +330,68 @@ export default function SalesSupportPage() {
         </CardContent>
       </Card>
 
+      {/* Create Ticket Modal */}
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Support Ticket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium">Title</label>
+              <Input value={newTicket.title} onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Description</label>
+              <Textarea value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div>
+                <label className="text-sm font-medium">Priority</label>
+                <select className="w-full px-3 py-2 border rounded-md" value={newTicket.priority} onChange={(e)=>setNewTicket({...newTicket, priority: e.target.value as any})}>
+                  <option value="low">Low</option>
+                  <option value="medium">Medium</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Status</label>
+                <select className="w-full px-3 py-2 border rounded-md" value={newTicket.status} onChange={(e)=>setNewTicket({...newTicket, status: e.target.value as any})}>
+                  <option value="open">Open</option>
+                  <option value="in_progress">In Progress</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium">Category</label>
+                <select className="w-full px-3 py-2 border rounded-md" value={newTicket.category} onChange={(e)=>setNewTicket({...newTicket, category: e.target.value})}>
+                  <option value="general">General</option>
+                  <option value="technical">Technical</option>
+                  <option value="billing">Billing</option>
+                  <option value="product">Product</option>
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <div>
+                <label className="text-sm font-medium">Floor</label>
+                <Input type="number" value={newTicket.floor} onChange={(e)=>setNewTicket({...newTicket, floor: Number(e.target.value) })} />
+              </div>
+              <div>
+                <label className="text-sm font-medium">Assign To (UUID)</label>
+                <Input value={newTicket.assigned_to || ''} onChange={(e)=>setNewTicket({...newTicket, assigned_to: e.target.value || undefined})} placeholder="Optional" />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+            <Button onClick={handleCreateTicket}>Create</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Tickets List */}
       <Card>
         <CardHeader>
@@ -396,15 +445,44 @@ export default function SalesSupportPage() {
                       {ticket.category.toUpperCase()}
                     </Badge>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Eye className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Edit className="w-4 h-4" />
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        <Reply className="w-4 h-4" />
-                      </Button>
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => {
+                           setActiveTicket(ticket);
+                           setIsViewOpen(true);
+                         }}
+                       >
+                         <Eye className="w-4 h-4" />
+                       </Button>
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => {
+                           setActiveTicket(ticket);
+                           setEditData({
+                             title: ticket.subject,
+                             description: ticket.description,
+                             priority: ticket.priority,
+                             status: ticket.status,
+                             category: ticket.category,
+                           });
+                           setIsEditOpen(true);
+                         }}
+                       >
+                         <Edit className="w-4 h-4" />
+                       </Button>
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => {
+                           setActiveTicket(ticket);
+                           setReplyMessage('');
+                           setIsReplyOpen(true);
+                         }}
+                       >
+                         <Reply className="w-4 h-4" />
+                       </Button>
                     </div>
                   </div>
                 </div>
@@ -433,6 +511,131 @@ export default function SalesSupportPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* View Ticket */}
+      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ticket Details</DialogTitle>
+          </DialogHeader>
+          {activeTicket && (
+            <div className="space-y-2 text-sm">
+              <div className="font-semibold">{activeTicket.ticket_number} — {activeTicket.subject}</div>
+              <div>Status: <span className={`inline-block px-2 py-0.5 rounded ${getStatusColor(activeTicket.status)}`}>{activeTicket.status.replace('_', ' ')}</span></div>
+              <div>Priority: <span className={`inline-block px-2 py-0.5 rounded ${getPriorityColor(activeTicket.priority)}`}>{activeTicket.priority}</span></div>
+              <div>Category: <span className={`inline-block px-2 py-0.5 rounded ${getCategoryColor(activeTicket.category)}`}>{activeTicket.category}</span></div>
+              <div>Customer: {activeTicket.customer_name} — {activeTicket.customer_email || 'N/A'}</div>
+              <div className="text-gray-600">{activeTicket.description}</div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Ticket */}
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Ticket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium">Title</label>
+              <Input value={editData.title} onChange={(e) => setEditData({ ...editData, title: e.target.value })} />
+            </div>
+            <div>
+              <label className="text-sm font-medium">Description</label>
+              <Textarea value={editData.description} onChange={(e) => setEditData({ ...editData, description: e.target.value })} />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <select className="px-3 py-2 border rounded-md" value={editData.priority} onChange={(e) => setEditData({ ...editData, priority: e.target.value as any })}>
+                <option value="low">Low</option>
+                <option value="medium">Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+              <select className="px-3 py-2 border rounded-md" value={editData.status} onChange={(e) => setEditData({ ...editData, status: e.target.value as any })}>
+                <option value="open">Open</option>
+                <option value="in_progress">In Progress</option>
+                <option value="resolved">Resolved</option>
+                <option value="closed">Closed</option>
+              </select>
+              <select className="px-3 py-2 border rounded-md" value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value })}>
+                <option value="general">General</option>
+                <option value="technical">Technical</option>
+                <option value="billing">Billing</option>
+                <option value="product">Product</option>
+              </select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!activeTicket) return;
+                try {
+                  const resp = await apiService.updateSupportTicket(String(activeTicket.id), {
+                    title: editData.title,
+                    description: editData.description,
+                    priority: editData.priority,
+                    status: editData.status,
+                    category: editData.category,
+                  });
+                  if (resp.success) {
+                    toast.success('Ticket updated');
+                    setIsEditOpen(false);
+                    fetchTickets();
+                  } else {
+                    toast.error(resp.message || 'Update failed');
+                  }
+                } catch (e) {
+                  console.error('Update ticket error', e);
+                  toast.error('Update failed');
+                }
+              }}
+            >Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reply Modal */}
+      <Dialog open={isReplyOpen} onOpenChange={setIsReplyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reply to Ticket</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Textarea placeholder="Type your reply..." value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsReplyOpen(false)}>Cancel</Button>
+            <Button
+              onClick={async () => {
+                if (!activeTicket || !replyMessage.trim()) {
+                  toast.error('Enter a message');
+                  return;
+                }
+                try {
+                  const resp = await apiService.createTicketMessage(String(activeTicket.id), {
+                    message: replyMessage,
+                    sender_id: 1,
+                    is_internal: false,
+                  });
+                  if (resp.success) {
+                    toast.success('Reply sent');
+                    setIsReplyOpen(false);
+                    setReplyMessage('');
+                  } else {
+                    toast.error(resp.message || 'Failed to send reply');
+                  }
+                } catch (e) {
+                  console.error('Reply error', e);
+                  toast.error('Failed to send reply');
+                }
+              }}
+            >Send</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

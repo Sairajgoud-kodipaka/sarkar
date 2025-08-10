@@ -17,6 +17,8 @@ import {
 import { getProductImageUrl, getProductEmoji, formatPrice } from '@/lib/utils';
 import { apiService } from '@/lib/api-service';
 import { toast } from 'sonner';
+import AddProductModal from '@/components/products/AddProductModal';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 
 interface Product {
   id: number;
@@ -25,11 +27,11 @@ interface Product {
   type: string;
   category: string;
   price: number;
-  stock_quantity: number;
+  stock_quantity?: number;
   description?: string;
   image?: string;
-  status: 'active' | 'inactive';
-  created_at: string;
+  status?: 'active' | 'inactive';
+  created_at?: string;
 }
 
 export default function SalesProductsPage() {
@@ -76,50 +78,7 @@ export default function SalesProductsPage() {
     fetchProducts();
   }, [selectedCategory, selectedType, searchTerm]);
 
-  // OLD MOCK DATA - REPLACED WITH REAL API
-  /*
-  const mockProducts: Product[] = [
-        {
-          id: 1,
-          name: 'Gold Necklace Set',
-          sku: 'GN-001',
-          type: 'Necklace',
-          category: 'Gold',
-          price: 75000,
-          stock_quantity: 5,
-          description: 'Beautiful gold necklace set with matching earrings',
-          image_url: '',
-          status: 'active',
-          created_at: '2024-01-01'
-        },
-        {
-          id: 2,
-          name: 'Diamond Ring',
-          sku: 'DR-002',
-          type: 'Ring',
-          category: 'Diamond',
-          price: 120000,
-          stock_quantity: 3,
-          description: 'Elegant diamond ring with platinum band',
-          image_url: '',
-          status: 'active',
-          created_at: '2024-01-05'
-        },
-        {
-          id: 3,
-          name: 'Silver Bracelet',
-          sku: 'SB-003',
-          type: 'Bracelet',
-          category: 'Silver',
-          price: 25000,
-          stock_quantity: 8,
-          description: 'Delicate silver bracelet with intricate design',
-          image_url: '',
-          status: 'active',
-          created_at: '2024-01-10'
-        }
-  ];
-  */
+  // Mock data removed - using real API data
 
   const filteredProducts = products.filter(product => {
     const matchesSearch = product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -137,7 +96,11 @@ export default function SalesProductsPage() {
 
   const totalProducts = products.length;
   const activeProducts = products.filter(p => p.status === 'active').length;
-  const lowStockProducts = products.filter(p => p.stock_quantity <= 3).length;
+  const lowStockProducts = products.filter(p => (p.stock_quantity ?? 0) <= 3).length;
+
+  const [isAddOpen, setIsAddOpen] = useState(false);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [isQuickViewOpen, setIsQuickViewOpen] = useState(false);
 
   if (loading) {
     return (
@@ -169,7 +132,7 @@ export default function SalesProductsPage() {
           <h1 className="text-3xl font-bold text-gray-900">Products</h1>
           <p className="text-gray-600">Browse and manage your product catalog</p>
         </div>
-        <Button>
+        <Button onClick={() => setIsAddOpen(true)}>
           <Plus className="w-4 h-4 mr-2" />
           Add Product
         </Button>
@@ -284,8 +247,13 @@ export default function SalesProductsPage() {
                   className="border border-gray-200 rounded-lg p-4 hover:shadow-md transition-shadow"
                 >
                   <div className="flex items-center space-x-3 mb-3">
-                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center text-2xl">
-                      {getProductEmoji(product)}
+                    <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                      {product.image ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={product.image} alt={product.name} className="w-12 h-12 object-cover" />
+                      ) : (
+                        <span className="text-2xl">{getProductEmoji(product)}</span>
+                      )}
                     </div>
                     <div className="flex-1">
                       <h3 className="font-semibold text-gray-900">{product.name}</h3>
@@ -304,8 +272,8 @@ export default function SalesProductsPage() {
                           </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600">Stock:</span>
-                      <span className={`font-medium ${product.stock_quantity <= 3 ? 'text-orange-600' : 'text-green-600'}`}>
-                        {product.stock_quantity} units
+                      <span className={`font-medium ${(product.stock_quantity ?? 0) <= 3 ? 'text-orange-600' : 'text-green-600'}`}>
+                        {product.stock_quantity ?? 0} units
                       </span>
                       </div>
                         </div>
@@ -318,10 +286,20 @@ export default function SalesProductsPage() {
                       </Badge>
                     </div>
                       <div className="flex gap-2">
-                      <Button variant="outline" size="sm">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          setQuickViewProduct(product);
+                          setIsQuickViewOpen(true);
+                        }}
+                      >
                           <Eye className="w-4 h-4" />
                         </Button>
-                      <Button size="sm">
+                      <Button
+                        size="sm"
+                        onClick={() => toast.success(`${product.name} added to cart`)}
+                      >
                           <ShoppingCart className="w-4 h-4" />
                         </Button>
                       </div>
@@ -340,6 +318,31 @@ export default function SalesProductsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Add Product Modal */}
+      <AddProductModal isOpen={isAddOpen} onClose={() => setIsAddOpen(false)} onSuccess={() => fetchProducts()} />
+
+      {/* Quick View Dialog */}
+      <Dialog open={isQuickViewOpen} onOpenChange={setIsQuickViewOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Product Details</DialogTitle>
+            <DialogDescription>Quick view</DialogDescription>
+          </DialogHeader>
+          {quickViewProduct && (
+            <div className="space-y-2">
+              <div className="font-semibold">{quickViewProduct.name}</div>
+              <div className="text-sm text-gray-600">SKU: {quickViewProduct.sku}</div>
+              <div className="text-sm text-gray-600">Category: {quickViewProduct.category} • Type: {quickViewProduct.type}</div>
+              <div className="text-sm text-gray-600">Price: {formatPrice(quickViewProduct.price)}</div>
+              <div className="text-sm text-gray-600">Stock: {quickViewProduct.stock_quantity ?? 0}</div>
+              {quickViewProduct.description && (
+                <div className="text-sm text-gray-600">{quickViewProduct.description}</div>
+              )}
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

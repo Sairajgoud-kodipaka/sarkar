@@ -61,36 +61,6 @@ interface NavItem {
 
 // Navigation items based on user role
 const getNavigationItems = (userRole?: string): NavItem[] => {
-  // Platform Admin navigation
-  if (userRole === 'platform_admin') {
-    return [
-      {
-        title: 'Dashboard',
-        href: '/platform/dashboard',
-        icon: Home,
-      },
-      {
-        title: 'Analytics',
-        href: '/platform/analytics',
-        icon: BarChart3,
-      },
-      {
-        title: 'Users',
-        href: '/platform/users',
-        icon: Users,
-      },
-      {
-        title: 'Settings',
-        href: '/platform/settings',
-        icon: Settings,
-      },
-      {
-        title: 'Support',
-        href: '/platform/support',
-        icon: MessageSquare,
-      },
-    ];
-  }
 
   // Business Admin navigation
   if (userRole === 'business_admin') {
@@ -174,8 +144,8 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
     ];
   }
 
-  // In-house Sales navigation
-  if (userRole === 'inhouse_sales') {
+  // In-house Sales & Sales Associate navigation
+  if (userRole === 'inhouse_sales' || userRole === 'sales_associate') {
     return [
       {
         title: 'Dashboard',
@@ -260,17 +230,17 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
     const isActive = isActiveRoute(item.href);
 
     const itemClasses = cn(
-      'flex items-center w-full px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200',
-      'hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+      'flex items-center w-full px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 sidebar-item-hover',
+      'hover:bg-sidebar-accent',
       isActive && 'bg-primary text-primary-foreground shadow-sm',
       !isActive && 'text-sidebar-foreground'
     );
 
     return (
-      <Link href={item.href} onClick={onClose}>
+      <Link href={item.href} onClick={onClose} className="group">
         <div className={itemClasses}>
           <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
-          <span className="truncate">{item.title}</span>
+          <span className="truncate group-hover:text-white">{item.title}</span>
         </div>
       </Link>
     );
@@ -279,8 +249,6 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
   // Get role display name
   const getRoleDisplayName = (role: string) => {
     switch (role) {
-      case 'platform_admin':
-        return 'PLATFORM ADMIN';
       case 'business_admin':
         return 'BUSINESS ADMIN';
       case 'floor_manager':
@@ -295,8 +263,10 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
   return (
     <div
       id="app-sidebar"
+      data-open={isOpen}
       className={cn(
-        'w-60 bg-sidebar text-sidebar-foreground h-full overflow-y-auto flex flex-col',
+        'w-60 bg-sidebar text-sidebar-foreground h-screen overflow-y-auto flex flex-col',
+        'fixed left-0 top-0 z-30', // Ensure proper positioning and z-index
         !isOpen && 'transform -translate-x-full lg:translate-x-0',
         className
       )}
@@ -308,10 +278,10 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
             <Gem className="h-6 w-6 text-primary-foreground" />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-semibold text-sidebar-foreground">
+            <span className="text-lg font-semibold text-white">
               CRM Dashboard
             </span>
-            <span className="text-xs text-sidebar-foreground/70">
+            <span className="text-xs text-white/80">
               {getRoleDisplayName(userRole)}
             </span>
           </div>
@@ -321,7 +291,9 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
       {/* Navigation */}
       <nav className="flex-1 px-4 py-4 space-y-1">
         {navigationItems.map((item) => (
-          <NavItemComponent key={item.href} item={item} />
+          <div key={item.href} className="sidebar-nav-item">
+            <NavItemComponent item={item} />
+          </div>
         ))}
       </nav>
 
@@ -331,7 +303,7 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-start px-3 py-3 h-auto text-sidebar-foreground hover:bg-sidebar-accent rounded-lg transition-colors duration-200"
+              className="w-full justify-start px-3 py-3 h-auto text-white hover:bg-sidebar-accent rounded-lg transition-colors duration-200"
             >
               <Avatar className="w-8 h-8 mr-3">
                 <AvatarImage src={undefined} />
@@ -340,12 +312,11 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start text-left">
-                <span className="text-sm font-medium truncate max-w-[120px]">
+                <span className="text-sm font-medium truncate max-w-[120px] text-white">
                   {user.email || 'User'}
                 </span>
-                <span className="text-xs text-sidebar-foreground/70 capitalize">
-                  {userRole === 'platform_admin' ? 'Platform Admin' : 
-                   userRole === 'business_admin' ? 'Business Admin' : 
+                <span className="text-xs text-white/80 capitalize">
+                  {userRole === 'business_admin' ? 'Business Admin' : 
                    userRole === 'floor_manager' ? 'Floor Manager' : 
                    userRole === 'inhouse_sales' ? 'In-house Sales' : 'User'}
                 </span>

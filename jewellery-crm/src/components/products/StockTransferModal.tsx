@@ -99,11 +99,9 @@ export default function StockTransferModal({ isOpen, onClose, onSuccess }: Stock
       }
 
       // Fetch products - Get global catalogue for transfer requests
-      const productsResponse = await apiService.getProducts({
-        scope: 'all' // Get all products (global + store) for transfer requests
-      });
+      const productsResponse = await apiService.getProducts();
       if (productsResponse.success && productsResponse.data) {
-        let productsData: Product[] = [];
+        let productsData: any[] = [];
         if (Array.isArray(productsResponse.data)) {
           productsData = productsResponse.data;
         } else if (typeof productsResponse.data === 'object' && productsResponse.data !== null) {
@@ -114,7 +112,16 @@ export default function StockTransferModal({ isOpen, onClose, onSuccess }: Stock
             productsData = data.data;
           }
         }
-        setProducts(productsData);
+        // Normalize scope field to default 'global' when missing
+        const normalized = productsData.map((p: any) => ({
+          id: p.id,
+          name: p.name,
+          sku: p.sku,
+          store: p.store,
+          store_name: p.store_name,
+          scope: (p.scope as 'global' | 'store') ?? 'global',
+        })) as Product[];
+        setProducts(normalized);
       }
 
       // Fetch stores
@@ -132,7 +139,10 @@ export default function StockTransferModal({ isOpen, onClose, onSuccess }: Stock
           }
         }
         // Filter out the current user's store from the destination options
-        storesData = storesData.filter(store => store.id !== user?.store);
+        if (user) {
+          const currentStoreId = (user as any)?.storeId ?? (user as any)?.store;
+          storesData = storesData.filter(store => store.id !== currentStoreId);
+        }
         setStores(storesData);
       }
     } catch (error) {
@@ -147,19 +157,25 @@ export default function StockTransferModal({ isOpen, onClose, onSuccess }: Stock
 
   const handleCreateTransfer = async () => {
     try {
-      if (!user?.store) {
+      if (!user) {
+        console.error('User not authenticated');
+        return;
+      }
+
+      const fromStore = (user as any)?.storeId ?? (user as any)?.store;
+      if (!fromStore) {
         console.error('User store not found');
         return;
       }
 
       const response = await apiService.createStockTransfer({
-        from_store: user.store,
+        from_store: fromStore,
         to_store: parseInt(createForm.to_store),
         product: parseInt(createForm.product),
         quantity: createForm.quantity,
         reason: createForm.reason,
         notes: createForm.notes,
-        requested_by: user.id,
+        requested_by: (user as any)?.id,
       });
 
       if (response.success) {
@@ -439,7 +455,7 @@ export default function StockTransferModal({ isOpen, onClose, onSuccess }: Stock
               <Button variant="outline" onClick={() => setIsCreateModalOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={handleCreateTransfer}>
+              <Button onClick={handleCreateTransfer} disabled={!user || !createForm.to_store || !createForm.product || createForm.quantity <= 0}>
                 Request Transfer
               </Button>
             </div>

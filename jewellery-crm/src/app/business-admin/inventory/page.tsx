@@ -72,14 +72,14 @@ export default function InventoryPage() {
       
       if (response.success) {
         const data = response.data as any;
-        const productsData = Array.isArray(data) ? data : data.results || [];
+        const productsData: Product[] = Array.isArray(data) ? data : data.results || [];
         setProducts(productsData);
         
         // Calculate stats
         const totalItems = productsData.length;
-        const lowStock = productsData.filter(product => product.quantity <= product.min_quantity && product.quantity > 0).length;
-        const outOfStock = productsData.filter(product => product.quantity === 0).length;
-        const inventoryValue = productsData.reduce((sum, product) => sum + (product.cost_price * product.quantity), 0);
+        const lowStock = productsData.filter((product: Product) => product.quantity <= product.min_quantity && product.quantity > 0).length;
+        const outOfStock = productsData.filter((product: Product) => product.quantity === 0).length;
+        const inventoryValue = productsData.reduce((sum: number, product: Product) => sum + (product.cost_price * product.quantity), 0);
         
         setStats({
           total_items: totalItems,
@@ -121,7 +121,7 @@ export default function InventoryPage() {
     let filtered = products;
     
     if (statusFilter !== 'all') {
-      filtered = products.filter(product => {
+      filtered = products.filter((product: Product) => {
         const stockStatus = getStockStatus(product);
         return stockStatus.status === statusFilter;
       });

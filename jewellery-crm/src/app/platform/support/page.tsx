@@ -75,7 +75,6 @@ export default function PlatformSupportTicketsPage() {
       const response = await apiService.getSupportTickets({
         search: searchTerm || undefined,
         status: statusFilter === 'all' ? undefined : statusFilter || undefined,
-        priority: priorityFilter === 'all' ? undefined : priorityFilter || undefined,
       });
       
       console.log('API Response:', response);
