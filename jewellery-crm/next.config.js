@@ -1,6 +1,5 @@
-import type { NextConfig } from "next";
-
-const nextConfig: NextConfig = {
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   // Temporarily disable ESLint during builds for Vercel deployment
   eslint: {
     ignoreDuringBuilds: true,
@@ -49,11 +48,6 @@ const nextConfig: NextConfig = {
       },
     ];
   },
-
-  // Build optimizations
-  experimental: {
-    optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
-  },
 };
 
-export default nextConfig;
+module.exports = nextConfig;
