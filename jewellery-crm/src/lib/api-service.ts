@@ -576,6 +576,8 @@ class ApiService {
         status: cleanProductData.status,
         image: cleanProductData.image || cleanProductData.main_image_url,
         image_url: cleanProductData.image || cleanProductData.main_image_url,
+        main_image_url: cleanProductData.main_image_url,
+        additional_images_urls: cleanProductData.additional_images_urls,
         // Only include fields that exist in your database schema
         type: cleanProductData.type,
       };

@@ -11,6 +11,8 @@ import { apiService } from '@/lib/api-service';
 import { useAuth } from '@/hooks/useAuth';
 import { Loader2, X, Edit, Trash2, Eye, Copy, Archive } from 'lucide-react';
 import ImageUpload from './ImageUpload';
+import { uploadImage } from '@/lib/image-upload';
+import { getProductImageUrl } from '@/lib/utils';
 
 interface ProductActionsModalProps {
   isOpen: boolean;
@@ -31,7 +33,6 @@ interface ProductFormData {
   sku: string;
   description: string;
   category: string;
-  brand: string;
   cost_price: number;
   selling_price: number;
   discount_price: number;
@@ -56,13 +57,15 @@ export default function ProductActionsModal({
   action 
 }: ProductActionsModalProps) {
   const { user } = useAuth();
+  const MATERIAL_OPTIONS = ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl'];
+  const COLOR_OPTIONS = ['Yellow', 'White', 'Rose', 'Two-tone'];
+  const KARAT_OPTIONS = ['14K', '18K', '22K', '24K'];
   const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
     sku: '',
     description: '',
     category: '',
-    brand: '',
     cost_price: 0,
     selling_price: 0,
     discount_price: 0,
@@ -86,6 +89,12 @@ export default function ProductActionsModal({
   const [additionalImagesUrls, setAdditionalImagesUrls] = useState<string[]>([]);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
+  // Select helpers for material/color/karat (size)
+  const getSelectValue = (val: string, opts: string[]) => (opts.includes((val || '').trim()) ? (val || '').trim() : val ? 'custom' : '');
+  const [materialSelect, setMaterialSelect] = useState<string>('');
+  const [colorSelect, setColorSelect] = useState<string>('');
+  const [karatSelect, setKaratSelect] = useState<string>('');
+  const [categorySelect, setCategorySelect] = useState<string>('');
 
   React.useEffect(() => {
     if (isOpen && product) {
@@ -95,27 +104,40 @@ export default function ProductActionsModal({
           name: product.name || '',
           sku: product.sku || '',
           description: product.description || '',
-          category: product.category?.toString() || '',
-          brand: product.brand || '',
+          category: (product.category_name || product.category || '').toString() || '',
           cost_price: product.cost_price || 0,
-          selling_price: product.selling_price || 0,
+          selling_price: product.selling_price || product.price || 0,
           discount_price: product.discount_price || 0,
-          quantity: product.quantity || 0,
+          quantity: product.quantity || product.stock_quantity || 0,
           min_quantity: product.min_quantity || 1,
           max_quantity: product.max_quantity || 100,
           weight: product.weight || 0,
           dimensions: product.dimensions || '',
           material: product.material || '',
           color: product.color || '',
-          size: product.size || '',
+          size: product.size || product.karat || '',
           status: product.status || 'active',
           is_featured: product.is_featured || false,
           is_bestseller: product.is_bestseller || false,
         });
         
         // Set image URLs for display
-        setMainImageUrl(product.main_image_url);
+        setMainImageUrl(getProductImageUrl(product));
         setAdditionalImagesUrls(product.additional_images_urls || []);
+
+        // Initialize selects
+        setMaterialSelect(getSelectValue(product.material || '', MATERIAL_OPTIONS));
+        setColorSelect(getSelectValue(product.color || '', COLOR_OPTIONS));
+        setKaratSelect(getSelectValue(product.size || product.karat || '', KARAT_OPTIONS));
+
+        // Initialize category select by matching name or id
+        setTimeout(() => {
+          const cat = (categories || []).find((c) =>
+            c.name?.toLowerCase() === String(product.category_name || product.category || '').toLowerCase() ||
+            String(c.id) === String(product.category)
+          );
+          if (cat?.id) setCategorySelect(String(cat.id));
+        }, 0);
       }
     }
   }, [isOpen, product, action]);
@@ -150,53 +172,66 @@ export default function ProductActionsModal({
     setError(null);
 
     try {
-      // Create FormData for file upload
-      const formDataToSend = new FormData();
-      
-      // Add basic product data
-      formDataToSend.append('name', formData.name);
-      formDataToSend.append('sku', formData.sku);
-      formDataToSend.append('description', formData.description);
-      if (formData.category) {
-        formDataToSend.append('category', formData.category);
-      }
-      formDataToSend.append('brand', formData.brand);
-      formDataToSend.append('cost_price', formData.cost_price.toString());
-      formDataToSend.append('selling_price', formData.selling_price.toString());
-      formDataToSend.append('discount_price', formData.discount_price.toString());
-      formDataToSend.append('quantity', formData.quantity.toString());
-      formDataToSend.append('min_quantity', formData.min_quantity.toString());
-      formDataToSend.append('max_quantity', formData.max_quantity.toString());
-      formDataToSend.append('weight', formData.weight.toString());
-      formDataToSend.append('dimensions', formData.dimensions);
-      formDataToSend.append('material', formData.material);
-      formDataToSend.append('color', formData.color);
-      formDataToSend.append('size', formData.size);
-      formDataToSend.append('status', formData.status);
-      formDataToSend.append('is_featured', formData.is_featured.toString());
-      formDataToSend.append('is_bestseller', formData.is_bestseller.toString());
-
-      // Add main image if changed
+      // Upload new main image first (if provided)
+      let uploadedMainUrl: string | undefined = undefined;
       if (mainImage) {
-        formDataToSend.append('main_image', mainImage);
+        const result = await uploadImage(mainImage);
+        if (result.error) {
+          throw new Error(`Image upload failed: ${result.error}`);
+        }
+        uploadedMainUrl = result.url;
       }
 
-      // Add additional images if changed
-      if (additionalImages.length > 0) {
-        additionalImages.forEach((image, index) => {
-          formDataToSend.append('additional_images', image);
-        });
+      // Upload additional images if provided
+      let uploadedAdditionalUrls: string[] = [];
+      if (additionalImages && additionalImages.length > 0) {
+        for (const file of additionalImages) {
+          const res = await uploadImage(file);
+          if (res.url) uploadedAdditionalUrls.push(res.url);
+        }
       }
 
-      // Add store from current user or preserve existing store
-      if (user?.store) {
-        formDataToSend.append('store', user.store.toString());
-      } else if (product.store) {
-        // If user doesn't have a store, preserve the product's existing store
-        formDataToSend.append('store', product.store.toString());
+      // Build updates object (plain JSON) for DB
+      const updates: Record<string, any> = {
+        name: formData.name,
+        sku: formData.sku,
+        description: formData.description,
+        category: formData.category,
+        cost_price: formData.cost_price,
+        selling_price: formData.selling_price,
+        discount_price: formData.discount_price || null,
+        quantity: formData.quantity,
+        min_quantity: formData.min_quantity,
+        max_quantity: formData.max_quantity,
+        weight: formData.weight,
+        dimensions: formData.dimensions,
+        material: formData.material,
+        color: formData.color,
+        size: formData.size,
+        status: formData.status,
+        is_featured: formData.is_featured,
+        is_bestseller: formData.is_bestseller,
+      };
+
+      // Persist image URL fields if uploaded
+      if (uploadedMainUrl) {
+        updates.image = uploadedMainUrl;
+        updates.image_url = uploadedMainUrl;
+        updates.main_image_url = uploadedMainUrl;
+      }
+      if (uploadedAdditionalUrls.length > 0) {
+        updates.additional_images_urls = uploadedAdditionalUrls;
       }
 
-      const response = await apiService.updateProduct(product.id.toString(), formDataToSend);
+      // Preserve store assignment if your schema supports it (optional)
+      const userStore = (user as any)?.user_metadata?.store ?? (user as any)?.user_metadata?.store_id;
+      if (userStore !== undefined && userStore !== null) {
+        updates.store = userStore;
+      } else if (product.store !== undefined && product.store !== null) {
+        updates.store = product.store;
+      }
+
+      const response = await apiService.updateProduct(product.id.toString(), updates);
       if (response.success) {
         onSuccess();
         onClose();
@@ -310,31 +345,47 @@ export default function ProductActionsModal({
         {action === 'view' && (
           <div className="space-y-6">
             {/* Product Images */}
-            {(product.main_image_url || (product.additional_images_urls && product.additional_images_urls.length > 0)) && (
+            {(() => {
+              const mainUrl = getProductImageUrl(product);
+              const gallery = product.additional_images_urls || [];
+              const hasAny = !!mainUrl || (Array.isArray(gallery) && gallery.length > 0);
+              if (!hasAny) {
+                return (
+                  <div>
+                    <h3 className="font-semibold mb-3">Product Images</h3>
+                    <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
+                      <div className="text-gray-500">
+                        <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <p className="text-sm">No images uploaded for this product</p>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+              return (
               <div>
                 <h3 className="font-semibold mb-3">Product Images</h3>
                 <div className="space-y-4">
-                  {/* Main Image */}
-                  {product.main_image_url && (
+                    {mainUrl && (
                     <div>
                       <Label className="text-sm text-gray-600 mb-2">Main Image</Label>
                       <div className="relative">
                         <img
-                          src={product.main_image_url}
+                            src={mainUrl}
                           alt={product.name}
                           className="w-48 h-48 object-cover rounded-lg border cursor-pointer hover:scale-105 transition-transform duration-200"
-                          onClick={() => handleImageClick(product.main_image_url)}
+                            onClick={() => handleImageClick(mainUrl)}
                         />
                       </div>
                     </div>
                   )}
-                  
-                  {/* Additional Images */}
-                  {product.additional_images_urls && product.additional_images_urls.length > 0 && (
+                    {Array.isArray(gallery) && gallery.length > 0 && (
                     <div>
                       <Label className="text-sm text-gray-600 mb-2">Additional Images</Label>
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        {product.additional_images_urls.map((imageUrl: string, index: number) => (
+                          {gallery.map((imageUrl: string, index: number) => (
                           <div key={index} className="relative">
                             <img
                               src={imageUrl}
@@ -349,22 +400,8 @@ export default function ProductActionsModal({
                   )}
                 </div>
               </div>
-            )}
-
-            {/* No Images Message */}
-            {!product.main_image_url && (!product.additional_images_urls || product.additional_images_urls.length === 0) && (
-              <div>
-                <h3 className="font-semibold mb-3">Product Images</h3>
-                <div className="text-center py-8 border-2 border-dashed border-gray-300 rounded-lg">
-                  <div className="text-gray-500">
-                    <svg className="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                    </svg>
-                    <p className="text-sm">No images uploaded for this product</p>
-                  </div>
-                </div>
-              </div>
-            )}
+              );
+            })()}
 
             {/* Product Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -383,10 +420,7 @@ export default function ProductActionsModal({
                     <Label className="text-sm text-gray-600">Category</Label>
                     <p className="font-medium">{product.category_name || 'Uncategorized'}</p>
                   </div>
-                  <div>
-                    <Label className="text-sm text-gray-600">Brand</Label>
-                    <p className="font-medium">{product.brand || 'N/A'}</p>
-                  </div>
+                  {/* Brand removed */}
                 </div>
               </div>
 
@@ -515,11 +549,15 @@ export default function ProductActionsModal({
               <div className="space-y-2">
                 <Label htmlFor="category">Category</Label>
                 <Select
-                  value={formData.category}
-                  onValueChange={(value) => handleInputChange('category', value)}
+                  value={categorySelect}
+                  onValueChange={(value) => {
+                    setCategorySelect(value);
+                    const cat = categories.find((c) => String(c.id) === value);
+                    handleInputChange('category', cat?.name || '');
+                  }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select category" />
+                    <SelectValue placeholder={formData.category || 'Select category'} />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
@@ -531,15 +569,7 @@ export default function ProductActionsModal({
                 </Select>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="brand">Brand</Label>
-                <Input
-                  id="brand"
-                  value={formData.brand}
-                  onChange={(e) => handleInputChange('brand', e.target.value)}
-                  placeholder="Enter brand"
-                />
-              </div>
+              {/* Brand field removed */}
             </div>
 
             {/* Pricing */}
@@ -642,22 +672,68 @@ export default function ProductActionsModal({
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="material">Material</Label>
+                <Select
+                  value={materialSelect || getSelectValue(formData.material, MATERIAL_OPTIONS)}
+                  onValueChange={(value) => {
+                    setMaterialSelect(value);
+                    if (value === 'custom') {
+                      handleInputChange('material', formData.material || '');
+                    } else {
+                      handleInputChange('material', value);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select material" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {MATERIAL_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {materialSelect === 'custom' && (
                 <Input
                   id="material"
                   value={formData.material}
                   onChange={(e) => handleInputChange('material', e.target.value)}
                   placeholder="e.g., Gold, Silver, Platinum"
                 />
+                )}
               </div>
 
               <div className="space-y-2">
                 <Label htmlFor="color">Color</Label>
+                <Select
+                  value={colorSelect || getSelectValue(formData.color, COLOR_OPTIONS)}
+                  onValueChange={(value) => {
+                    setColorSelect(value);
+                    if (value === 'custom') {
+                      handleInputChange('color', formData.color || '');
+                    } else {
+                      handleInputChange('color', value);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select color" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {COLOR_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {colorSelect === 'custom' && (
                 <Input
                   id="color"
                   value={formData.color}
                   onChange={(e) => handleInputChange('color', e.target.value)}
                   placeholder="e.g., Yellow, White, Rose"
                 />
+                )}
               </div>
             </div>
 
@@ -675,13 +751,36 @@ export default function ProductActionsModal({
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="size">Size</Label>
+                <Label htmlFor="size">Karat</Label>
+                <Select
+                  value={karatSelect || getSelectValue(formData.size, KARAT_OPTIONS)}
+                  onValueChange={(value) => {
+                    setKaratSelect(value);
+                    if (value === 'custom') {
+                      handleInputChange('size', formData.size || '');
+                    } else {
+                      handleInputChange('size', value);
+                    }
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select karat" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {KARAT_OPTIONS.map((opt) => (
+                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                    ))}
+                    <SelectItem value="custom">Custom…</SelectItem>
+                  </SelectContent>
+                </Select>
+                {karatSelect === 'custom' && (
                 <Input
                   id="size"
                   value={formData.size}
                   onChange={(e) => handleInputChange('size', e.target.value)}
                   placeholder="e.g., 18K, 22K"
                 />
+                )}
               </div>
 
               <div className="space-y-2">

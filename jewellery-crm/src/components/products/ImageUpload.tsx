@@ -56,6 +56,10 @@ export default function ImageUpload({
     const previewUrls = files.map(file => URL.createObjectURL(file));
     setAdditionalImagesPreviews(prev => [...prev, ...previewUrls]);
     onAdditionalImagesChange(files);
+    // reset input to allow selecting the same file again
+    if (additionalImagesInputRef.current) {
+      additionalImagesInputRef.current.value = '';
+    }
   };
 
   const handleDrag = (e: React.DragEvent) => {

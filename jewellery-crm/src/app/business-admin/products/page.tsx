@@ -21,6 +21,7 @@ import ProductActionsModal from '@/components/products/ProductActionsModal';
 import ScopeIndicator from '@/components/ui/ScopeIndicator';
 import { useScopedVisibility } from '@/lib/scoped-visibility';
 import { getProductImageUrl, getProductEmoji } from '@/lib/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTable, Column } from '@/components/tables/DataTable';
 
 interface Product {
@@ -473,15 +474,32 @@ export default function ProductsPage() {
               loading={false}
               searchable={false}
               columns={([
-                { key: 'name', title: 'Name', sortable: true, render: (_v, row) => (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xl">{getProductEmoji(row as any)}</span>
-                    <div className="min-w-0">
-                      <div className="font-medium truncate" title={(row as any).name}>{(row as any).name}</div>
-                      <div className="text-xs text-muted-foreground">SKU: {(row as any).sku}</div>
+                { key: 'name', title: 'Name', sortable: true, render: (_v, row) => {
+                  const url = getProductImageUrl(row as any);
+                  const emoji = getProductEmoji(row as any);
+                  return (
+                    <div className="flex items-center gap-3">
+                      {url ? (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <img src={url} alt={(row as any).name}
+                                 className="w-10 h-10 rounded object-cover border"
+                                 onError={(e) => ((e.target as HTMLImageElement).style.display = 'none')} />
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <img src={url} alt={(row as any).name} className="max-w-[200px] max-h-[200px] object-contain" />
+                          </TooltipContent>
+                        </Tooltip>
+                      ) : (
+                        <span className="text-xl">{emoji}</span>
+                      )}
+                      <div className="min-w-0">
+                        <div className="font-medium truncate" title={(row as any).name}>{(row as any).name}</div>
+                        <div className="text-xs text-muted-foreground">SKU: {(row as any).sku}</div>
+                      </div>
                     </div>
-                  </div>
-                ) },
+                  );
+                } },
                 { key: 'category', title: 'Category', sortable: true },
                 { key: 'price', title: 'Price', sortable: true, render: (v) => formatCurrency(Number(v || 0)) },
                 { key: 'quantity', title: 'Stock', sortable: true, render: (v, row) => (

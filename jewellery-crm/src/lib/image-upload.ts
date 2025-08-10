@@ -22,36 +22,7 @@ export const uploadImage = async (file: File): Promise<UploadResult> => {
 
     console.log('📂 File path:', filePath);
 
-    // Check if we can access storage
-    console.log('🔍 Checking storage access...');
-    const { data: buckets, error: bucketsError } = await supabase.storage.listBuckets();
-    
-    if (bucketsError) {
-      console.error('❌ Error listing buckets:', bucketsError);
-      return { 
-        url: '', 
-        path: '', 
-        error: `Storage access error: ${bucketsError.message}` 
-      };
-    }
-
-    console.log('📦 Available buckets:', buckets?.map(b => b.name));
-
-    const productImagesBucket = buckets?.find(bucket => bucket.name === 'product-images');
-    
-    if (!productImagesBucket) {
-      console.error('❌ product-images bucket not found!');
-      console.log('📋 Available buckets:', buckets?.map(b => b.name));
-      return { 
-        url: '', 
-        path: '', 
-        error: 'product-images bucket not found. Available buckets: ' + buckets?.map(b => b.name).join(', ') 
-      };
-    }
-
-    console.log('✅ Found product-images bucket');
-
-    // Upload the file to Supabase Storage
+    // Upload the file to Supabase Storage directly
     console.log('📤 Uploading file to Supabase Storage...');
     const { data, error } = await supabase.storage
       .from('product-images')
@@ -68,16 +39,15 @@ export const uploadImage = async (file: File): Promise<UploadResult> => {
         error: error.error
       });
       
-      // If bucket doesn't exist, return error
-      if (error.message.includes('bucket') || error.message.includes('not found')) {
-        console.log('❌ Storage bucket not available');
+      // If bucket doesn't exist or access denied, return a clear message
+      if (/not\s+found|does\s+not\s+exist|bucket/i.test(error.message)) {
         return {
           url: '',
           path: filePath,
-          error: 'Storage bucket not configured'
+          error: 'product-images bucket missing or not accessible. Ensure it exists and policies allow authenticated uploads.'
         };
       }
-      
+
       return { url: '', path: '', error: error.message };
     }
 
