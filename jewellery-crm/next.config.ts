@@ -7,7 +7,6 @@ const nextConfig: NextConfig = {
   },
   
   // Production optimizations
-  output: 'standalone',
   poweredByHeader: false,
   
   // Image optimization
@@ -55,9 +54,6 @@ const nextConfig: NextConfig = {
   experimental: {
     optimizePackageImports: ['lucide-react', '@radix-ui/react-icons'],
   },
-
-  // Bundle analyzer (optional - remove in production)
-  // bundleAnalyzer: process.env.ANALYZE === 'true',
 };
 
 export default nextConfig;
