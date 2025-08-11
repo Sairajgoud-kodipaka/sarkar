@@ -8,62 +8,83 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import {
   MessageSquare, AlertCircle, CheckCircle, Clock, Search, Plus, Filter,
-  Phone, Mail, User, Calendar, Eye, Edit, Reply, Flag
+  MoreHorizontal, Eye, Edit, Trash2, User, Calendar, Tag
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { apiService } from '@/lib/api-service';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
-interface SupportTicket {
+interface Ticket {
   id: string;
   title: string;
-  description: string;
-  status: 'open' | 'in_progress' | 'resolved' | 'closed';
-  priority: 'low' | 'medium' | 'high' | 'urgent';
+  customer: {
+    name: string;
+    email: string;
+    avatar: string;
+  };
   category: string;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  assigned_to: string;
-  created_at: string;
-  updated_at: string;
-  floor: number;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  assignedTo: string;
+  createdAt: string;
+  lastUpdated: string;
+  description: string;
+}
+
+interface SupportQuery {
+  id: string;
+  question: string;
+  customer: string;
+  category: string;
+  status: 'pending' | 'answered' | 'escalated';
+  createdAt: string;
 }
 
 export default function FloorManagerSupportPage() {
   const router = useRouter();
   const { user } = useAuth();
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
-  const [filteredTickets, setFilteredTickets] = useState<SupportTicket[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [selectedStatus, setSelectedStatus] = useState('all');
-  const [selectedPriority, setSelectedPriority] = useState('all');
-  const [selectedCategory, setSelectedCategory] = useState('all');
-  const [isLoading, setIsLoading] = useState(true);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [queries, setQueries] = useState<SupportQuery[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedTab, setSelectedTab] = useState('tickets');
+  const [stats, setStats] = useState({
+    openTickets: 0,
+    resolutionRate: '0%',
+    totalTickets: 0
+  });
 
-  // New Ticket Modal
+  // New Ticket Modal state
   const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [newTicket, setNewTicket] = useState({
     title: '',
     description: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     category: 'general',
+    customer_id: undefined as number | undefined,
+    assigned_to: '' as string | undefined,
+    floor: undefined as number | undefined,
   });
 
-  // Edit Ticket Modal
+  // Edit Ticket Modal state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [editingTicket, setEditingTicket] = useState<any | null>(null);
+  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
 
-  // Reply Modal
-  const [isReplyModalOpen, setIsReplyModalOpen] = useState(false);
-  const [replyTicketId, setReplyTicketId] = useState<string | null>(null);
-  const [replyMessage, setReplyMessage] = useState('');
+  // Assign Ticket Modal state
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignTicketId, setAssignTicketId] = useState<string>('');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('');
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
   useEffect(() => {
-    loadTickets();
+    fetchSupportData();
   }, []);
 
   // Realtime: refresh on any support_tickets change
@@ -71,7 +92,16 @@ export default function FloorManagerSupportPage() {
     const channel = supabase
       .channel('realtime-floor-support-tickets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => {
-        loadTickets();
+        fetchSupportData();
+        toast.info('Support tickets updated in real-time!');
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_ticket_messages' }, () => {
+        fetchSupportData();
+        toast.info('New support message received!');
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => {
+        fetchSupportData();
+        toast.info('Team member assignments updated!');
       })
       .subscribe();
     return () => {
@@ -79,57 +109,65 @@ export default function FloorManagerSupportPage() {
     };
   }, []);
 
-  useEffect(() => {
-    filterTickets();
-  }, [tickets, searchTerm, selectedStatus, selectedPriority, selectedCategory]);
-
-  const loadTickets = async () => {
+  const fetchSupportData = async () => {
     try {
-      setIsLoading(true);
-      // Load real support tickets from database
-      const response = await apiService.getSupportTickets();
+      setLoading(true);
+      // Fetch support tickets
+      const ticketsResponse = await apiService.getSupportTickets();
       
-      if (response.success && response.data) {
+      if (ticketsResponse.success && ticketsResponse.data) {
         // Transform API data to match component interface
-        const transformedTickets: SupportTicket[] = response.data.map((ticket: any) => ({
+        const transformedTickets: Ticket[] = ticketsResponse.data.map((ticket: any) => ({
           id: ticket.id.toString(),
           title: ticket.title,
-          description: ticket.description,
+          description: ticket.description || ticket.summary || '',
           status: ticket.status,
           priority: ticket.priority,
           category: ticket.category || 'general',
-          customer_name: ticket.customer?.name || ticket.customer_name || 'Unknown Customer',
-          customer_email: ticket.customer?.email || '',
-          customer_phone: ticket.customer?.phone || '',
-          assigned_to: ticket.assigned_to_member ? 
+          customer: {
+            name: ticket.customer?.name || ticket.customer_name || 'Unknown Customer',
+            email: ticket.customer?.email || ticket.customer_email || 'N/A',
+            avatar: ''
+          },
+          assignedTo: ticket.assigned_to_member ? 
             `${ticket.assigned_to_member.first_name} ${ticket.assigned_to_member.last_name}` : 
             'Unassigned',
-          created_at: ticket.created_at,
-          updated_at: ticket.updated_at,
-          floor: ticket.floor || 1
+          createdAt: ticket.created_at,
+          lastUpdated: ticket.updated_at,
         }));
         
         setTickets(transformedTickets);
+        
+        // Calculate stats
+        const openTickets = transformedTickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+        const totalTickets = transformedTickets.length;
+        const resolutionRate = totalTickets > 0 ? Math.round((transformedTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length / totalTickets) * 100) : 0;
+        
+        setStats({
+          openTickets,
+          resolutionRate: `${resolutionRate}%`,
+          totalTickets
+        });
       } else {
-        console.log('No tickets found or API error');
         setTickets([]);
       }
     } catch (error) {
-      console.error('Error loading tickets:', error);
+      console.error('Error fetching support data:', error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleClearFilters = () => {
-    setSearchTerm('');
-    setSelectedStatus('all');
-    setSelectedPriority('all');
-    setSelectedCategory('all');
-  };
-
   const openNewTicket = () => {
-    setNewTicket({ title: '', description: '', priority: 'medium', category: 'general' });
+    setNewTicket({ 
+      title: '', 
+      description: '', 
+      priority: 'medium', 
+      category: 'general',
+      customer_id: undefined,
+      assigned_to: '',
+      floor: undefined
+    });
     setIsNewModalOpen(true);
   };
 
@@ -145,21 +183,16 @@ export default function FloorManagerSupportPage() {
       };
       await apiService.createSupportTicket(payload);
       setIsNewModalOpen(false);
-      await loadTickets();
+      await fetchSupportData();
+      toast.success('Ticket created successfully!');
     } catch (e) {
       console.error('Failed to create ticket', e);
+      toast.error('Failed to create ticket');
     }
   };
 
-  const openEdit = (t: SupportTicket) => {
-    setEditingTicket({
-      id: t.id,
-      title: t.title,
-      description: t.description,
-      status: t.status,
-      priority: t.priority,
-      category: t.category,
-    });
+  const openEdit = (t: Ticket) => {
+    setEditingTicket(t);
     setIsEditModalOpen(true);
   };
 
@@ -175,132 +208,180 @@ export default function FloorManagerSupportPage() {
       });
       setIsEditModalOpen(false);
       setEditingTicket(null);
-      await loadTickets();
+      await fetchSupportData();
+      toast.success('Ticket updated successfully!');
     } catch (e) {
       console.error('Failed to update ticket', e);
+      toast.error('Failed to update ticket');
     }
   };
 
-  const openReply = (ticketId: string) => {
-    setReplyTicketId(ticketId);
-    setReplyMessage('');
-    setIsReplyModalOpen(true);
-  };
-
-  const sendReply = async () => {
-    if (!replyTicketId || !replyMessage.trim()) return;
+  const openAssignModal = async (ticketId: string) => {
+    setAssignTicketId(ticketId);
+    setSelectedAssignee('');
+    // Fetch team members
     try {
-      // apiService.createTicketMessage expects { message, sender_id, is_internal }
-      await apiService.createTicketMessage(replyTicketId, {
-        message: replyMessage,
-        sender_id: user?.id,
-        is_internal: false,
-      });
-      setIsReplyModalOpen(false);
-      setReplyTicketId(null);
-      setReplyMessage('');
-    } catch (e) {
-      console.error('Failed to send reply', e);
+      const response = await apiService.getTeamMembers();
+      if (response && Array.isArray(response)) {
+        setTeamMembers(response);
+      }
+    } catch (error) {
+      console.error('Failed to fetch team members:', error);
+    }
+    setIsAssignModalOpen(true);
+  };
+
+  const assignTicket = async () => {
+    if (!selectedAssignee) return;
+    try {
+      await apiService.updateSupportTicket(assignTicketId, { assigned_to: selectedAssignee });
+      setIsAssignModalOpen(false);
+      setAssignTicketId('');
+      setSelectedAssignee('');
+      await fetchSupportData();
+      
+      // Get assigned member name for notification
+      const assignedMember = teamMembers.find(m => m.id === selectedAssignee);
+      const memberName = assignedMember ? `${assignedMember.first_name} ${assignedMember.last_name}` : 'Team Member';
+      
+      toast.success(`Ticket assigned to ${memberName}!`);
+      
+      // Real-time notification for assigned member
+      if (supabase) {
+        await supabase.from('notifications').insert({
+          user_id: selectedAssignee,
+          title: 'New Ticket Assignment',
+          message: `You have been assigned a new support ticket: ${tickets.find(t => t.id === assignTicketId)?.title}`,
+          type: 'assignment',
+          read: false
+        });
+      }
+    } catch (error) {
+      console.error('Failed to assign ticket', error);
+      toast.error('Failed to assign ticket');
     }
   };
 
-  const filterTickets = () => {
-    let filtered = tickets;
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(ticket =>
-        ticket.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        ticket.description.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  const closeTicket = async (ticketId: string) => {
+    try {
+      await apiService.updateSupportTicket(ticketId, { status: 'closed' });
+      await fetchSupportData();
+      toast.success('Ticket closed successfully!');
+    } catch (error) {
+      console.error('Failed to close ticket', error);
+      toast.error('Failed to close ticket');
     }
-
-    // Status filter
-    if (selectedStatus !== 'all') {
-      filtered = filtered.filter(ticket => ticket.status === selectedStatus);
-    }
-
-    // Priority filter
-    if (selectedPriority !== 'all') {
-      filtered = filtered.filter(ticket => ticket.priority === selectedPriority);
-    }
-
-    // Category filter
-    if (selectedCategory !== 'all') {
-      filtered = filtered.filter(ticket => ticket.category === selectedCategory);
-    }
-
-    setFilteredTickets(filtered);
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case 'open':
-        return <Badge className="bg-blue-100 text-blue-800">Open</Badge>;
-      case 'in_progress':
-        return <Badge className="bg-yellow-100 text-yellow-800">In Progress</Badge>;
-      case 'resolved':
-        return <Badge className="bg-green-100 text-green-800">Resolved</Badge>;
-      case 'closed':
-        return <Badge className="bg-gray-100 text-gray-800">Closed</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-800">{status}</Badge>;
+  const deleteTicket = async (ticketId: string) => {
+    try {
+      await apiService.deleteSupportTicket(ticketId);
+      await fetchSupportData();
+      toast.success('Ticket deleted successfully!');
+    } catch (error) {
+      console.error('Failed to delete ticket', error);
+      toast.error('Failed to delete ticket');
     }
+  };
+
+  const handleTrashClick = (ticketId: string) => {
+    closeTicket(ticketId); // First click always closes
+    const recentlyClosed = sessionStorage.getItem(`recentlyClosed_${ticketId}`);
+    if (recentlyClosed) {
+      sessionStorage.removeItem(`recentlyClosed_${ticketId}`);
+      deleteTicket(ticketId);
+      toast.success('Ticket deleted successfully!');
+    } else {
+      sessionStorage.setItem(`recentlyClosed_${ticketId}`, 'true');
+      toast.info('Ticket closed! Click the trash icon again within 3 seconds to delete it permanently.');
+      setTimeout(() => {
+        sessionStorage.removeItem(`recentlyClosed_${ticketId}`);
+      }, 3000); // 3 second window
+    }
+  };
+
+  const getStatusBadge = (status: string, ticketId?: string) => {
+    const statusConfig = {
+      'open': { text: 'Open', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+      'in_progress': { text: 'In Progress', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+      'resolved': { text: 'Resolved', color: 'bg-green-100 text-green-800 border-green-200' },
+      'closed': { text: 'Closed', color: 'bg-gray-100 text-gray-800 border-gray-200' },
+      'reopened': { text: 'Reopened', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+    };
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.open;
+    const recentlyClosed = ticketId && sessionStorage.getItem(`recentlyClosed_${ticketId}`);
+    
+    return (
+      <div className="flex items-center gap-2">
+        <Badge className={config.color}>
+          {config.text}
+        </Badge>
+        {recentlyClosed && (
+          <Badge variant="destructive" className="text-xs bg-red-100 text-red-800 border-red-200">
+            Delete Available
+          </Badge>
+        )}
+      </div>
+    );
   };
 
   const getPriorityBadge = (priority: string) => {
-    switch (priority) {
-      case 'urgent':
-        return <Badge className="bg-red-100 text-red-800">Urgent</Badge>;
-      case 'high':
-        return <Badge className="bg-orange-100 text-orange-800">High</Badge>;
-      case 'medium':
-        return <Badge className="bg-yellow-100 text-yellow-800">Medium</Badge>;
-      case 'low':
-        return <Badge className="bg-green-100 text-green-800">Low</Badge>;
-      default:
-        return <Badge className="bg-gray-100 text-gray-800">{priority}</Badge>;
-    }
+    const priorityConfig = {
+      'low': { variant: 'secondary', className: 'bg-gray-100 text-gray-800' },
+      'medium': { variant: 'default', className: 'bg-blue-100 text-blue-800' },
+      'high': { variant: 'default', className: 'bg-orange-100 text-orange-800' },
+      'urgent': { variant: 'destructive', className: 'bg-red-100 text-red-800' },
+    };
+    
+    const config = priorityConfig[priority as keyof typeof priorityConfig] || priorityConfig.medium;
+    
+    return (
+      <Badge variant={config.variant as any} className={config.className}>
+        {priority}
+      </Badge>
+    );
   };
 
   const getPriorityIcon = (priority: string) => {
     switch (priority) {
       case 'urgent':
-        return <AlertCircle className="w-4 h-4 text-red-600" />;
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
       case 'high':
-        return <AlertCircle className="w-4 h-4 text-orange-600" />;
+        return <AlertCircle className="h-4 w-4 text-orange-500" />;
       case 'medium':
-        return <Clock className="w-4 h-4 text-yellow-600" />;
+        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
       case 'low':
-        return <CheckCircle className="w-4 h-4 text-green-600" />;
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       default:
-        return <Clock className="w-4 h-4 text-gray-600" />;
+        return <AlertCircle className="h-4 w-4 text-gray-400" />;
     }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
       day: 'numeric',
-      month: 'short',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit'
-    });
+      });
+    } catch (error) {
+      return 'Invalid Date';
+    }
   };
 
-  const stats = {
-    total: tickets.length,
-    open: tickets.filter(t => t.status === 'open').length,
-    inProgress: tickets.filter(t => t.status === 'in_progress').length,
-    resolved: tickets.filter(t => t.status === 'resolved').length,
-    urgent: tickets.filter(t => t.priority === 'urgent').length
-  };
-
-  if (isLoading) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex items-center gap-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <span>Loading support data...</span>
+        </div>
       </div>
     );
   }
@@ -310,8 +391,12 @@ export default function FloorManagerSupportPage() {
       {/* Header */}
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Support Tickets</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Support Center</h1>
           <p className="text-gray-600">Manage customer support and floor issues</p>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-green-600 font-medium">Real-time updates active</span>
+          </div>
         </div>
         <Button className="bg-blue-600 hover:bg-blue-700" onClick={openNewTicket}>
           <Plus className="w-4 h-4 mr-2" />
@@ -320,219 +405,396 @@ export default function FloorManagerSupportPage() {
       </div>
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Total Tickets</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
-              </div>
-              <MessageSquare className="w-8 h-8 text-blue-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Tickets</CardTitle>
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalTickets}</div>
+            <p className="text-xs text-muted-foreground">
+              All support tickets
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Open</p>
-                <p className="text-2xl font-bold text-blue-600">{stats.open}</p>
-              </div>
-              <AlertCircle className="w-8 h-8 text-blue-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Open Tickets</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.openTickets}</div>
+            <p className="text-xs text-muted-foreground">
+              Requiring attention
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">In Progress</p>
-                <p className="text-2xl font-bold text-yellow-600">{stats.inProgress}</p>
-              </div>
-              <Clock className="w-8 h-8 text-yellow-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.resolutionRate}</div>
+            <p className="text-xs text-muted-foreground">
+              Successfully resolved
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Resolved</p>
-                <p className="text-2xl font-bold text-green-600">{stats.resolved}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-4">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Urgent</p>
-                <p className="text-2xl font-bold text-red-600">{stats.urgent}</p>
-              </div>
-              <Flag className="w-8 h-8 text-red-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <div className="w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">2</div>
+            <p className="text-xs text-muted-foreground">
+              Currently online
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Main Content Tabs */}
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="tickets">Support Tickets</TabsTrigger>
+          <TabsTrigger value="queries">Customer Queries</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="tickets" className="space-y-6">
       <Card>
-        <CardContent className="p-4">
-          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Support Tickets</CardTitle>
+                <div className="flex gap-2">
             <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-              <Input
-                placeholder="Search tickets..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10"
-              />
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Search tickets..." className="pl-8 w-64" />
+                  </div>
+                  <Button variant="outline" size="sm">
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filter
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ticket</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                          <span className="ml-2">Loading tickets...</span>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : tickets.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <div className="text-center">
+                          <MessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No support tickets</h3>
+                          <p className="text-gray-600 mb-4">No support tickets have been created yet.</p>
+                          <Button onClick={openNewTicket}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create First Ticket
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    tickets.map((ticket) => (
+                    <TableRow key={ticket.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getPriorityIcon(ticket.priority)}
+                          <div>
+                            <div className="font-medium">{ticket.title}</div>
+                            <div className="text-sm text-muted-foreground truncate max-w-xs">
+                              {ticket.description}
+                            </div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={ticket.customer.avatar} />
+                            <AvatarFallback>
+                              {ticket.customer.name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <div className="font-medium text-sm">{ticket.customer.name}</div>
+                            <div className="text-xs text-muted-foreground">{ticket.customer.email}</div>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{ticket.category}</Badge>
+                      </TableCell>
+                      <TableCell>{getPriorityBadge(ticket.priority)}</TableCell>
+                      <TableCell>{getStatusBadge(ticket.status, ticket.id)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{ticket.assignedTo}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-muted-foreground">
+                          {formatDate(ticket.createdAt)}
             </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { window.location.href = `/floor-manager/support/tickets/${ticket.id}`; }}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(ticket)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Ticket
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openAssignModal(ticket.id)}>
+                              <User className="mr-2 h-4 w-4" />
+                              Assign to Team Member
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-red-600"
+                              onClick={() => handleTrashClick(ticket.id)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              {sessionStorage.getItem(`recentlyClosed_${ticket.id}`) 
+                                ? 'Delete Ticket' 
+                                : 'Close Ticket (Click again to delete)'
+                              }
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-            <select
-              value={selectedStatus}
-              onChange={(e) => setSelectedStatus(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Status</option>
-              <option value="open">Open</option>
-              <option value="in_progress">In Progress</option>
-              <option value="resolved">Resolved</option>
-              <option value="closed">Closed</option>
-            </select>
-
-            <select
-              value={selectedPriority}
-              onChange={(e) => setSelectedPriority(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Priority</option>
-              <option value="urgent">Urgent</option>
-              <option value="high">High</option>
-              <option value="medium">Medium</option>
-              <option value="low">Low</option>
-            </select>
-
-            <select
-              value={selectedCategory}
-              onChange={(e) => setSelectedCategory(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-            >
-              <option value="all">All Categories</option>
-              <option value="Product Issues">Product Issues</option>
-              <option value="Technical Issues">Technical Issues</option>
-              <option value="Customer Service">Customer Service</option>
-              <option value="Inventory Issues">Inventory Issues</option>
-              <option value="Facility Issues">Facility Issues</option>
-            </select>
-
-            <Button variant="outline" className="flex items-center" onClick={handleClearFilters}>
-              <Filter className="w-4 h-4 mr-2" />
-              Clear Filters
+        <TabsContent value="queries" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Customer Queries</CardTitle>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filter by Status
             </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Question</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {queries.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        <div className="text-center">
+                          <MessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No customer queries</h3>
+                          <p className="text-gray-600 mb-4">No customer queries have been submitted yet.</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    queries.map((query) => (
+                      <TableRow key={query.id}>
+                        <TableCell>
+                          <div className="max-w-md">
+                            <div className="font-medium">{query.question}</div>
+                          </div>
+                        </TableCell>
+                        <TableCell className="font-medium">{query.customer}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{query.category}</Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(query.status)}</TableCell>
+                        <TableCell>{query.createdAt}</TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Answer Query
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Tag className="mr-2 h-4 w-4" />
+                                Categorize
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Ticket Volume Trends</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  Chart placeholder - Ticket volume analytics will be displayed here
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Response Time Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  Chart placeholder - Response time analytics will be displayed here
           </div>
         </CardContent>
       </Card>
 
-      {/* Tickets List */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Category Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
       <div className="space-y-4">
-        {filteredTickets.map((ticket) => (
-          <Card key={ticket.id} className="hover:shadow-lg transition-shadow">
-            <CardContent className="p-6">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3 mb-3">
-                    {getPriorityIcon(ticket.priority)}
-                    <h3 className="text-lg font-semibold text-gray-900">{ticket.title}</h3>
-                    <div className="flex space-x-2">
-                      {getStatusBadge(ticket.status)}
-                      {getPriorityBadge(ticket.priority)}
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Order Issues</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: '45%' }}></div>
+                      </div>
+                      <span className="text-sm font-medium">45%</span>
                     </div>
                   </div>
-                  
-                  <p className="text-gray-600 mb-4 line-clamp-2">{ticket.description}</p>
-                  
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                    <div>
-                      <span className="text-gray-500">Customer:</span>
-                      <div className="flex items-center space-x-1">
-                        <User className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{ticket.customer_name}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Product Issues</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-green-600 h-2 rounded-full" style={{ width: '30%' }}></div>
                       </div>
-                    </div>
-                    
-                    <div>
-                      <span className="text-gray-500">Contact:</span>
-                      <div className="flex items-center space-x-1">
-                        <Mail className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{ticket.customer_email}</span>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <span className="text-gray-500">Phone:</span>
-                      <div className="flex items-center space-x-1">
-                        <Phone className="w-4 h-4 text-gray-400" />
-                        <span className="font-medium">{ticket.customer_phone}</span>
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <span className="text-gray-500">Floor:</span>
-                      <span className="font-medium">Floor {ticket.floor}</span>
+                      <span className="text-sm font-medium">30%</span>
                     </div>
                   </div>
-                  
-                  <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-200">
-                    <div className="flex items-center space-x-4 text-sm text-gray-500">
-                      <div className="flex items-center space-x-1">
-                        <Calendar className="w-4 h-4" />
-                        <span>Created: {formatDate(ticket.created_at)}</span>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Payment Issues</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-yellow-600 h-2 rounded-full" style={{ width: '15%' }}></div>
                       </div>
-                      <div className="flex items-center space-x-1">
-                        <User className="w-4 h-4" />
-                        <span>Assigned: {ticket.assigned_to}</span>
+                      <span className="text-sm font-medium">15%</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Appointments</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-purple-600 h-2 rounded-full" style={{ width: '10%' }}></div>
                       </div>
+                      <span className="text-sm font-medium">10%</span>
                     </div>
-                    
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm" onClick={() => router.push(`/business-admin/support/tickets/${ticket.id}`)}>
-                        <Eye className="w-4 h-4 mr-1" />
-                        View
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => openEdit(ticket)}>
-                        <Edit className="w-4 h-4 mr-1" />
-                        Edit
-                      </Button>
-                      <Button variant="outline" size="sm" onClick={() => openReply(ticket.id)}>
-                        <Reply className="w-4 h-4 mr-1" />
-                        Reply
-                      </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Agent Performance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-xs">JS</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">John Smith</span>
                     </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">24 tickets</div>
+                      <div className="text-xs text-muted-foreground">Avg: 2.1h response</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-xs">LB</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">Lisa Brown</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">18 tickets</div>
+                      <div className="text-xs text-muted-foreground">Avg: 1.8h response</div>
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
-        ))}
       </div>
-
-      {filteredTickets.length === 0 && (
-        <Card>
-          <CardContent className="p-8 text-center">
-            <MessageSquare className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No tickets found</h3>
-            <p className="text-gray-600">Try adjusting your search or filter criteria.</p>
-          </CardContent>
-        </Card>
-      )}
+        </TabsContent>
+      </Tabs>
 
       {/* New Ticket Modal */}
       <Dialog open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
@@ -582,7 +844,7 @@ export default function FloorManagerSupportPage() {
               <Input value={editingTicket.title} onChange={(e) => setEditingTicket({ ...editingTicket, title: e.target.value })} />
               <Textarea value={editingTicket.description} onChange={(e) => setEditingTicket({ ...editingTicket, description: e.target.value })} />
               <div className="grid grid-cols-2 gap-3">
-                <Select value={editingTicket.priority} onValueChange={(v) => setEditingTicket({ ...editingTicket, priority: v })}>
+                <Select value={editingTicket.priority} onValueChange={(v) => setEditingTicket({ ...editingTicket, priority: v as 'low' | 'medium' | 'high' | 'urgent' })}>
                   <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="low">Low</SelectItem>
@@ -591,7 +853,7 @@ export default function FloorManagerSupportPage() {
                     <SelectItem value="urgent">Urgent</SelectItem>
                   </SelectContent>
                 </Select>
-                <Select value={editingTicket.status} onValueChange={(v) => setEditingTicket({ ...editingTicket, status: v })}>
+                <Select value={editingTicket.status} onValueChange={(v) => setEditingTicket({ ...editingTicket, status: v as 'open' | 'in_progress' | 'resolved' | 'closed' })}>
                   <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="open">Open</SelectItem>
@@ -610,18 +872,25 @@ export default function FloorManagerSupportPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Reply Modal */}
-      <Dialog open={isReplyModalOpen} onOpenChange={setIsReplyModalOpen}>
+      {/* Assign Ticket Modal */}
+      <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reply to Ticket</DialogTitle>
+            <DialogTitle>Assign Ticket</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <Textarea placeholder="Type your reply..." value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} rows={4} />
+            <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+              <SelectTrigger><SelectValue placeholder="Select team member" /></SelectTrigger>
+              <SelectContent>
+                {teamMembers.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsReplyModalOpen(false)}>Cancel</Button>
-            <Button onClick={sendReply} disabled={!replyMessage.trim()}>Send Reply</Button>
+            <Button variant="outline" onClick={() => setIsAssignModalOpen(false)}>Cancel</Button>
+            <Button onClick={assignTicket} disabled={!selectedAssignee}>Assign</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

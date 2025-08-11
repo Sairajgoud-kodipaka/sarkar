@@ -10,16 +10,25 @@ export function cn(...inputs: ClassValue[]) {
  * Only returns actual uploaded images from Supabase, no placeholders
  */
 export function getProductImageUrl(product: any): string {
+  // Defensive: if a string URL is passed instead of an object, just return it
+  if (typeof product === 'string') {
+    return product;
+  }
   // Only log once per product to avoid spam
   if (!product.image && !product.image_url && !product.main_image_url) {
     // Use a simple flag to avoid repeated logging
-    if (!product._loggedNoImage) {
+    if (product && typeof product === 'object' && !product._loggedNoImage) {
       console.log('🔍 No image found for product:', {
         id: product.id,
         name: product.name,
         category: product.category
       });
-      product._loggedNoImage = true;
+      // Guard against readonly/primitive
+      try {
+        (product as any)._loggedNoImage = true;
+      } catch {
+        // ignore
+      }
     }
   }
 

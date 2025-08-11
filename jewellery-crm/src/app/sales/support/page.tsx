@@ -5,214 +5,382 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
-import { 
-  MessageSquare, 
-  AlertCircle, 
-  CheckCircle, 
-  Clock, 
-  Search, 
-  Plus, 
-  Filter,
-  Phone,
-  Mail,
-  User,
-  Calendar,
-  Eye,
-  Edit,
-  Reply
-} from 'lucide-react';
-import { apiService } from '@/lib/api-service';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { 
+  MessageSquare, AlertCircle, CheckCircle, Clock, Search, Plus, Filter,
+  MoreHorizontal, Eye, Edit, Trash2, User, Calendar, Tag
+} from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { apiService } from '@/lib/api-service';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/hooks/useAuth';
 import { toast } from 'sonner';
 
-interface SupportTicket {
-  id: number;
-  ticket_number: string;
-  subject: string;
-  description: string;
-  customer_name: string;
-  customer_email: string;
-  customer_phone: string;
-  created_date: string;
-  updated_date: string;
+interface Ticket {
+  id: string;
+  title: string;
+  customer: {
+    name: string;
+    email: string;
+    avatar: string;
+  };
+  category: string;
   priority: 'low' | 'medium' | 'high' | 'urgent';
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
-  category: 'technical' | 'billing' | 'product' | 'general';
-  assigned_to: string;
-  floor: string;
-  response_time?: string;
+  assignedTo: string;
+  createdAt: string;
+  lastUpdated: string;
+  description: string;
+}
+
+interface SupportQuery {
+  id: string;
+  question: string;
+  customer: string;
+  category: string;
+  status: 'pending' | 'answered' | 'escalated';
+  createdAt: string;
 }
 
 export default function SalesSupportPage() {
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const router = useRouter();
+  const { user } = useAuth();
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [queries, setQueries] = useState<SupportQuery[]>([]);
   const [loading, setLoading] = useState(true);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [priorityFilter, setPriorityFilter] = useState('all');
-  const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [selectedTab, setSelectedTab] = useState('tickets');
+  const [stats, setStats] = useState({
+    openTickets: 0,
+    resolutionRate: '0%',
+    totalTickets: 0
+  });
+
+  // New Ticket Modal state
+  const [isNewModalOpen, setIsNewModalOpen] = useState(false);
   const [newTicket, setNewTicket] = useState({
     title: '',
     description: '',
     priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     category: 'general',
-    status: 'open' as 'open' | 'in_progress' | 'resolved' | 'closed',
-    floor: 1,
+    customer_id: undefined as number | undefined,
     assigned_to: '' as string | undefined,
+    floor: undefined as number | undefined,
   });
-  const [activeTicket, setActiveTicket] = useState<SupportTicket | null>(null);
-  const [isViewOpen, setIsViewOpen] = useState(false);
-  const [isEditOpen, setIsEditOpen] = useState(false);
-  const [isReplyOpen, setIsReplyOpen] = useState(false);
-  const [replyMessage, setReplyMessage] = useState('');
-  const [editData, setEditData] = useState({
-    title: '',
-    description: '',
-    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
-    status: 'open' as 'open' | 'in_progress' | 'resolved' | 'closed',
-    category: 'general'
-  });
+
+  // Edit Ticket Modal state
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingTicket, setEditingTicket] = useState<Ticket | null>(null);
+
+  // Assign Ticket Modal state
+  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [assignTicketId, setAssignTicketId] = useState<string>('');
+  const [selectedAssignee, setSelectedAssignee] = useState<string>('');
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
 
   useEffect(() => {
-    fetchTickets();
+    fetchSupportData();
   }, []);
 
-  const fetchTickets = async () => {
+  // Realtime: refresh on any support_tickets change
+  useEffect(() => {
+    const channel = supabase
+      .channel('realtime-sales-support-tickets')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => {
+        fetchSupportData();
+        toast.info('Support tickets updated in real-time!');
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_ticket_messages' }, () => {
+        fetchSupportData();
+        toast.info('New support message received!');
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => {
+        fetchSupportData();
+        toast.info('Team member assignments updated!');
+      })
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
+  const fetchSupportData = async () => {
     try {
       setLoading(true);
-      // Load real support tickets from database
-      const response = await apiService.getSupportTickets();
+      // Fetch support tickets
+      const ticketsResponse = await apiService.getSupportTickets();
       
-      if (response.success && response.data) {
-        // Transform API data to match component interface used in this page
-        const transformedTickets: SupportTicket[] = response.data.map((ticket: any) => ({
-          id: ticket.id,
-          ticket_number: `TKT-${String(ticket.id).padStart(4, '0')}`,
-          subject: ticket.title || ticket.subject || 'Support Ticket',
-          description: ticket.description || '',
+      if (ticketsResponse.success && ticketsResponse.data) {
+        // Transform API data to match component interface
+        const transformedTickets: Ticket[] = ticketsResponse.data.map((ticket: any) => ({
+          id: ticket.id.toString(),
+          title: ticket.title,
+          description: ticket.description || ticket.summary || '',
           status: ticket.status,
           priority: ticket.priority,
           category: ticket.category || 'general',
-          customer_name: ticket.customer?.name || ticket.customer_name || 'Unknown Customer',
-          customer_email: ticket.customer?.email || '',
-          customer_phone: ticket.customer?.phone || '',
-          assigned_to: ticket.assigned_to_member 
-            ? `${ticket.assigned_to_member.first_name} ${ticket.assigned_to_member.last_name}` 
-            : 'Unassigned',
-          created_date: ticket.created_at,
-          updated_date: ticket.updated_at,
-          floor: ticket.floor ? `Floor ${ticket.floor}` : 'Floor 1',
+          customer: {
+            name: ticket.customer?.name || ticket.customer_name || 'Unknown Customer',
+            email: ticket.customer?.email || ticket.customer_email || 'N/A',
+            avatar: ''
+          },
+          assignedTo: ticket.assigned_to_member ? 
+            `${ticket.assigned_to_member.first_name} ${ticket.assigned_to_member.last_name}` : 
+            'Unassigned',
+          createdAt: ticket.created_at,
+          lastUpdated: ticket.updated_at,
         }));
         
         setTickets(transformedTickets);
+        
+        // Calculate stats
+        const openTickets = transformedTickets.filter(t => t.status === 'open' || t.status === 'in_progress').length;
+        const totalTickets = transformedTickets.length;
+        const resolutionRate = totalTickets > 0 ? Math.round((transformedTickets.filter(t => t.status === 'resolved' || t.status === 'closed').length / totalTickets) * 100) : 0;
+        
+        setStats({
+          openTickets,
+          resolutionRate: `${resolutionRate}%`,
+          totalTickets
+        });
       } else {
         setTickets([]);
       }
-      
-      // Mock data removed - using real API data
     } catch (error) {
-      console.error('Error fetching tickets:', error);
-      toast.error('Failed to load support tickets');
-      setTickets([]);
+      console.error('Error fetching support data:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateTicket = async () => {
+  const openNewTicket = () => {
+    setNewTicket({ 
+      title: '', 
+      description: '', 
+      priority: 'medium', 
+      category: 'general',
+      customer_id: undefined,
+      assigned_to: '',
+      floor: undefined
+    });
+    setIsNewModalOpen(true);
+  };
+
+  const createTicket = async () => {
+    if (!newTicket.title.trim()) return;
     try {
-      if (!newTicket.title || !newTicket.description) {
-        toast.error('Please fill all required fields');
-        return;
-      }
-      const resp = await apiService.createSupportTicket({
+      const payload: any = {
         title: newTicket.title,
         description: newTicket.description,
         priority: newTicket.priority,
         category: newTicket.category,
-        status: newTicket.status,
-        floor: newTicket.floor,
-        assigned_to: newTicket.assigned_to,
-      });
-      if (resp.success) {
-        toast.success('Ticket created');
-        setIsCreateOpen(false);
-        fetchTickets();
-      } else {
-        toast.error(resp.message || 'Failed to create ticket');
-      }
+        floor: user?.user_metadata?.floor ? Number(user.user_metadata.floor) : undefined,
+      };
+      await apiService.createSupportTicket(payload);
+      setIsNewModalOpen(false);
+      await fetchSupportData();
+      toast.success('Ticket created successfully!');
     } catch (e) {
-      console.error('Create ticket error', e);
+      console.error('Failed to create ticket', e);
       toast.error('Failed to create ticket');
     }
   };
 
-  const getPriorityColor = (priority: string) => {
+  const openEdit = (t: Ticket) => {
+    setEditingTicket(t);
+    setIsEditModalOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editingTicket) return;
+    try {
+      await apiService.updateSupportTicket(editingTicket.id, {
+        title: editingTicket.title,
+        description: editingTicket.description,
+        status: editingTicket.status,
+        priority: editingTicket.priority,
+        category: editingTicket.category,
+      });
+      setIsEditModalOpen(false);
+      setEditingTicket(null);
+      await fetchSupportData();
+      toast.success('Ticket updated successfully!');
+    } catch (e) {
+      console.error('Failed to update ticket', e);
+      toast.error('Failed to update ticket');
+    }
+  };
+
+  const openAssignModal = async (ticketId: string) => {
+    setAssignTicketId(ticketId);
+    setSelectedAssignee('');
+    // Fetch team members
+    try {
+      const response = await apiService.getTeamMembers();
+      if (response && Array.isArray(response)) {
+        setTeamMembers(response);
+      }
+    } catch (error) {
+      console.error('Failed to fetch team members:', error);
+    }
+    setIsAssignModalOpen(true);
+  };
+
+  const assignTicket = async () => {
+    if (!selectedAssignee) return;
+    try {
+      await apiService.updateSupportTicket(assignTicketId, { assigned_to: selectedAssignee });
+      setIsAssignModalOpen(false);
+      setAssignTicketId('');
+      setSelectedAssignee('');
+      await fetchSupportData();
+      
+      // Get assigned member name for notification
+      const assignedMember = teamMembers.find(m => m.id === selectedAssignee);
+      const memberName = assignedMember ? `${assignedMember.first_name} ${assignedMember.last_name}` : 'Team Member';
+      
+      toast.success(`Ticket assigned to ${memberName}!`);
+      
+      // Real-time notification for assigned member
+      if (supabase) {
+        await supabase.from('notifications').insert({
+          user_id: selectedAssignee,
+          title: 'New Ticket Assignment',
+          message: `You have been assigned a new support ticket: ${tickets.find(t => t.id === assignTicketId)?.title}`,
+          type: 'assignment',
+          read: false
+        });
+      }
+    } catch (error) {
+      console.error('Failed to assign ticket', error);
+      toast.error('Failed to assign ticket');
+    }
+  };
+
+  const closeTicket = async (ticketId: string) => {
+    try {
+      await apiService.updateSupportTicket(ticketId, { status: 'closed' });
+      await fetchSupportData();
+      toast.success('Ticket closed successfully!');
+    } catch (error) {
+      console.error('Failed to close ticket', error);
+      toast.error('Failed to close ticket');
+    }
+  };
+
+  const deleteTicket = async (ticketId: string) => {
+    try {
+      await apiService.deleteSupportTicket(ticketId);
+      await fetchSupportData();
+      toast.success('Ticket deleted successfully!');
+    } catch (error) {
+      console.error('Failed to delete ticket', error);
+      toast.error('Failed to delete ticket');
+    }
+  };
+
+  const handleTrashClick = (ticketId: string) => {
+    closeTicket(ticketId); // First click always closes
+    const recentlyClosed = sessionStorage.getItem(`recentlyClosed_${ticketId}`);
+    if (recentlyClosed) {
+      sessionStorage.removeItem(`recentlyClosed_${ticketId}`);
+      deleteTicket(ticketId);
+      toast.success('Ticket deleted successfully!');
+    } else {
+      sessionStorage.setItem(`recentlyClosed_${ticketId}`, 'true');
+      toast.info('Ticket closed! Click the trash icon again within 3 seconds to delete it permanently.');
+      setTimeout(() => {
+        sessionStorage.removeItem(`recentlyClosed_${ticketId}`);
+      }, 3000); // 3 second window
+    }
+  };
+
+  const getStatusBadge = (status: string, ticketId?: string) => {
+    const statusConfig = {
+      'open': { text: 'Open', color: 'bg-blue-100 text-blue-800 border-blue-200' },
+      'in_progress': { text: 'In Progress', color: 'bg-yellow-100 text-yellow-800 border-yellow-200' },
+      'resolved': { text: 'Resolved', color: 'bg-green-100 text-green-800 border-green-200' },
+      'closed': { text: 'Closed', color: 'bg-gray-100 text-gray-800 border-gray-200' },
+      'reopened': { text: 'Reopened', color: 'bg-orange-100 text-orange-800 border-orange-200' },
+    };
+    
+    const config = statusConfig[status as keyof typeof statusConfig] || statusConfig.open;
+    const recentlyClosed = ticketId && sessionStorage.getItem(`recentlyClosed_${ticketId}`);
+    
+    return (
+      <div className="flex items-center gap-2">
+        <Badge className={config.color}>
+          {config.text}
+        </Badge>
+        {recentlyClosed && (
+          <Badge variant="destructive" className="text-xs bg-red-100 text-red-800 border-red-200">
+            Delete Available
+          </Badge>
+        )}
+      </div>
+    );
+  };
+
+  const getPriorityBadge = (priority: string) => {
+    const priorityConfig = {
+      'low': { variant: 'secondary', className: 'bg-gray-100 text-gray-800' },
+      'medium': { variant: 'default', className: 'bg-blue-100 text-blue-800' },
+      'high': { variant: 'default', className: 'bg-orange-100 text-orange-800' },
+      'urgent': { variant: 'destructive', className: 'bg-red-100 text-red-800' },
+    };
+    
+    const config = priorityConfig[priority as keyof typeof priorityConfig] || priorityConfig.medium;
+    
+    return (
+      <Badge variant={config.variant as any} className={config.className}>
+        {priority}
+      </Badge>
+    );
+  };
+
+  const getPriorityIcon = (priority: string) => {
     switch (priority) {
       case 'urgent':
-        return 'bg-red-100 text-red-800';
+        return <AlertCircle className="h-4 w-4 text-red-500" />;
       case 'high':
-        return 'bg-orange-100 text-orange-800';
+        return <AlertCircle className="h-4 w-4 text-orange-500" />;
       case 'medium':
-        return 'bg-yellow-100 text-yellow-800';
+        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
       case 'low':
-        return 'bg-green-100 text-green-800';
+        return <CheckCircle className="h-4 w-4 text-green-500" />;
       default:
-        return 'bg-gray-100 text-gray-800';
+        return <AlertCircle className="h-4 w-4 text-gray-400" />;
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'open':
-        return 'bg-red-100 text-red-800';
-      case 'in_progress':
-        return 'bg-blue-100 text-blue-800';
-      case 'resolved':
-        return 'bg-green-100 text-green-800';
-      case 'closed':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
+  const formatDate = (dateString: string) => {
+    if (!dateString) return 'N/A';
+    
+    try {
+      const date = new Date(dateString);
+      if (isNaN(date.getTime())) return 'Invalid Date';
+      
+      return date.toLocaleDateString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+      });
+    } catch (error) {
+      return 'Invalid Date';
     }
   };
-
-  const getCategoryColor = (category: string) => {
-    switch (category) {
-      case 'technical':
-        return 'bg-purple-100 text-purple-800';
-      case 'billing':
-        return 'bg-blue-100 text-blue-800';
-      case 'product':
-        return 'bg-green-100 text-green-800';
-      case 'general':
-        return 'bg-gray-100 text-gray-800';
-      default:
-        return 'bg-gray-100 text-gray-800';
-    }
-  };
-
-  const filteredTickets = tickets.filter(ticket => {
-    const matchesSearch = ticket.ticket_number.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ticket.subject.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ticket.customer_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         ticket.customer_email.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
-    const matchesPriority = priorityFilter === 'all' || ticket.priority === priorityFilter;
-    return matchesSearch && matchesStatus && matchesPriority;
-  });
-
-  const openTickets = tickets.filter(t => t.status === 'open');
-  const inProgressTickets = tickets.filter(t => t.status === 'in_progress');
-  const resolvedTickets = tickets.filter(t => t.status === 'resolved');
-  const urgentTickets = tickets.filter(t => t.priority === 'urgent');
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading support tickets...</p>
+        <div className="flex items-center gap-2">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+          <span>Loading support data...</span>
         </div>
       </div>
     );
@@ -221,418 +389,508 @@ export default function SalesSupportPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Sales Support</h1>
-          <p className="text-gray-600">Manage customer support tickets</p>
+          <h1 className="text-3xl font-bold text-gray-900">Support Center</h1>
+          <p className="text-gray-600">Manage customer support and sales inquiries</p>
+          <div className="flex items-center gap-2 mt-2">
+            <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+            <span className="text-sm text-green-600 font-medium">Real-time updates active</span>
+          </div>
         </div>
-        <Button onClick={() => setIsCreateOpen(true)}>
+        <Button className="bg-blue-600 hover:bg-blue-700" onClick={openNewTicket}>
           <Plus className="w-4 h-4 mr-2" />
-          Create Ticket
+          New Ticket
         </Button>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+      {/* Stats Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Open Tickets</p>
-                <p className="text-2xl font-bold text-red-600">{openTickets.length}</p>
-              </div>
-              <AlertCircle className="w-8 h-8 text-red-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Tickets</CardTitle>
+            <MessageSquare className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.totalTickets}</div>
+            <p className="text-xs text-muted-foreground">
+              All support tickets
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">In Progress</p>
-                <p className="text-2xl font-bold text-blue-600">{inProgressTickets.length}</p>
-              </div>
-              <Clock className="w-8 h-8 text-blue-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Open Tickets</CardTitle>
+            <AlertCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.openTickets}</div>
+            <p className="text-xs text-muted-foreground">
+              Requiring attention
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Resolved</p>
-                <p className="text-2xl font-bold text-green-600">{resolvedTickets.length}</p>
-              </div>
-              <CheckCircle className="w-8 h-8 text-green-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Resolution Rate</CardTitle>
+            <CheckCircle className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{stats.resolutionRate}</div>
+            <p className="text-xs text-muted-foreground">
+              Successfully resolved
+            </p>
           </CardContent>
         </Card>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-600">Urgent</p>
-                <p className="text-2xl font-bold text-orange-600">{urgentTickets.length}</p>
-              </div>
-              <AlertCircle className="w-8 h-8 text-orange-600" />
-            </div>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <div className="w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">2</div>
+            <p className="text-xs text-muted-foreground">
+              Currently online
+            </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Main Content Tabs */}
+      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="tickets">Support Tickets</TabsTrigger>
+          <TabsTrigger value="queries">Customer Queries</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="tickets" className="space-y-6">
       <Card>
-        <CardContent className="p-6">
-          <div className="flex flex-col md:flex-row gap-4">
-            <div className="flex-1">
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Support Tickets</CardTitle>
+                <div className="flex gap-2">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
-                <Input
-                  placeholder="Search tickets..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Search tickets..." className="pl-8 w-64" />
+                  </div>
+                  <Button variant="outline" size="sm">
+                    <Filter className="h-4 w-4 mr-2" />
+                    Filter
+                  </Button>
+                </div>
               </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Ticket</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Priority</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Assigned To</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {loading ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <div className="flex items-center justify-center">
+                          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                          <span className="ml-2">Loading tickets...</span>
             </div>
-            <div className="flex gap-2">
-              <select
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Status</option>
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-              </select>
-              <select
-                value={priorityFilter}
-                onChange={(e) => setPriorityFilter(e.target.value)}
-                className="px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="all">All Priority</option>
-                <option value="urgent">Urgent</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-              </select>
-              <Button variant="outline">
-                <Filter className="w-4 h-4 mr-2" />
-                More Filters
+                      </TableCell>
+                    </TableRow>
+                  ) : tickets.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8">
+                        <div className="text-center">
+                          <MessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No support tickets</h3>
+                          <p className="text-gray-600 mb-4">No support tickets have been created yet.</p>
+                          <Button onClick={openNewTicket}>
+                            <Plus className="h-4 w-4 mr-2" />
+                            Create First Ticket
               </Button>
             </div>
-          </div>
-        </CardContent>
-      </Card>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    tickets.map((ticket) => (
+                    <TableRow key={ticket.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {getPriorityIcon(ticket.priority)}
+            <div>
+                            <div className="font-medium">{ticket.title}</div>
+                            <div className="text-sm text-muted-foreground truncate max-w-xs">
+                              {ticket.description}
+            </div>
+            </div>
+              </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-8 w-8">
+                            <AvatarImage src={ticket.customer.avatar} />
+                            <AvatarFallback>
+                              {ticket.customer.name.split(' ').map(n => n[0]).join('')}
+                            </AvatarFallback>
+                          </Avatar>
+              <div>
+                            <div className="font-medium text-sm">{ticket.customer.name}</div>
+                            <div className="text-xs text-muted-foreground">{ticket.customer.email}</div>
+              </div>
+            </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{ticket.category}</Badge>
+                      </TableCell>
+                      <TableCell>{getPriorityBadge(ticket.priority)}</TableCell>
+                      <TableCell>{getStatusBadge(ticket.status, ticket.id)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <User className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm">{ticket.assignedTo}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm text-muted-foreground">
+                          {formatDate(ticket.createdAt)}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" className="h-8 w-8 p-0">
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => { window.location.href = `/sales/support/tickets/${ticket.id}`; }}>
+                              <Eye className="mr-2 h-4 w-4" />
+                              View Details
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openEdit(ticket)}>
+                              <Edit className="mr-2 h-4 w-4" />
+                              Edit Ticket
+                            </DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => openAssignModal(ticket.id)}>
+                              <User className="mr-2 h-4 w-4" />
+                              Assign to Team Member
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem 
+                              className="text-red-600"
+                              onClick={() => handleTrashClick(ticket.id)}
+                            >
+                              <Trash2 className="mr-2 h-4 w-4" />
+                              {sessionStorage.getItem(`recentlyClosed_${ticket.id}`) 
+                                ? 'Delete Ticket' 
+                                : 'Close Ticket (Click again to delete)'
+                              }
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </TableCell>
+                    </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-      {/* Create Ticket Modal */}
-      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <TabsContent value="queries" className="space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-center">
+                <CardTitle>Customer Queries</CardTitle>
+                <Button variant="outline" size="sm">
+                  <Filter className="h-4 w-4 mr-2" />
+                  Filter by Status
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Question</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {queries.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8">
+                        <div className="text-center">
+                          <MessageSquare className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                          <h3 className="text-lg font-semibold mb-2">No customer queries</h3>
+                          <p className="text-gray-600 mb-4">No customer queries have been submitted yet.</p>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    queries.map((query) => (
+                      <TableRow key={query.id}>
+                        <TableCell>
+                          <div className="max-w-md">
+                            <div className="font-medium">{query.question}</div>
+              </div>
+                        </TableCell>
+                        <TableCell className="font-medium">{query.customer}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline">{query.category}</Badge>
+                        </TableCell>
+                        <TableCell>{getStatusBadge(query.status)}</TableCell>
+                        <TableCell>{query.createdAt}</TableCell>
+                        <TableCell className="text-right">
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" className="h-8 w-8 p-0">
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem>
+                                <Eye className="mr-2 h-4 w-4" />
+                                View Details
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Edit className="mr-2 h-4 w-4" />
+                                Answer Query
+                              </DropdownMenuItem>
+                              <DropdownMenuItem>
+                                <Tag className="mr-2 h-4 w-4" />
+                                Categorize
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Ticket Volume Trends</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  Chart placeholder - Ticket volume analytics will be displayed here
+            </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Response Time Distribution</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="h-64 flex items-center justify-center text-muted-foreground">
+                  Chart placeholder - Response time analytics will be displayed here
+          </div>
+              </CardContent>
+            </Card>
+            
+      <Card>
+        <CardHeader>
+                <CardTitle>Category Breakdown</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Order Issues</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-blue-600 h-2 rounded-full" style={{ width: '45%' }}></div>
+                      </div>
+                      <span className="text-sm font-medium">45%</span>
+                    </div>
+                  </div>
+                <div className="flex items-center justify-between">
+                    <span className="text-sm">Product Issues</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-green-600 h-2 rounded-full" style={{ width: '30%' }}></div>
+                      </div>
+                      <span className="text-sm font-medium">30%</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Payment Issues</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-yellow-600 h-2 rounded-full" style={{ width: '15%' }}></div>
+                      </div>
+                      <span className="text-sm font-medium">15%</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm">Appointments</span>
+                    <div className="flex items-center gap-2">
+                      <div className="w-32 bg-gray-200 rounded-full h-2">
+                        <div className="bg-purple-600 h-2 rounded-full" style={{ width: '10%' }}></div>
+                      </div>
+                      <span className="text-sm font-medium">10%</span>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Agent Performance</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-xs">JS</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">John Smith</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">24 tickets</div>
+                      <div className="text-xs text-muted-foreground">Avg: 2.1h response</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Avatar className="h-6 w-6">
+                        <AvatarFallback className="text-xs">LB</AvatarFallback>
+                      </Avatar>
+                      <span className="text-sm">Lisa Brown</span>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-medium">18 tickets</div>
+                      <div className="text-xs text-muted-foreground">Avg: 1.8h response</div>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+      </Tabs>
+
+      {/* New Ticket Modal */}
+      <Dialog open={isNewModalOpen} onOpenChange={setIsNewModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Create Support Ticket</DialogTitle>
+            <DialogTitle>New Support Ticket</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Title</label>
-              <Input value={newTicket.title} onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })} />
-            </div>
-            <div>
-              <label className="text-sm font-medium">Description</label>
-              <Textarea value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} />
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <div>
-                <label className="text-sm font-medium">Priority</label>
-                <select className="w-full px-3 py-2 border rounded-md" value={newTicket.priority} onChange={(e)=>setNewTicket({...newTicket, priority: e.target.value as any})}>
-                  <option value="low">Low</option>
-                  <option value="medium">Medium</option>
-                  <option value="high">High</option>
-                  <option value="urgent">Urgent</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Status</label>
-                <select className="w-full px-3 py-2 border rounded-md" value={newTicket.status} onChange={(e)=>setNewTicket({...newTicket, status: e.target.value as any})}>
-                  <option value="open">Open</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="closed">Closed</option>
-                </select>
-              </div>
-              <div>
-                <label className="text-sm font-medium">Category</label>
-                <select className="w-full px-3 py-2 border rounded-md" value={newTicket.category} onChange={(e)=>setNewTicket({...newTicket, category: e.target.value})}>
-                  <option value="general">General</option>
-                  <option value="technical">Technical</option>
-                  <option value="billing">Billing</option>
-                  <option value="product">Product</option>
-                </select>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              <div>
-                <label className="text-sm font-medium">Floor</label>
-                <Input type="number" value={newTicket.floor} onChange={(e)=>setNewTicket({...newTicket, floor: Number(e.target.value) })} />
-              </div>
-              <div>
-                <label className="text-sm font-medium">Assign To (UUID)</label>
-                <Input value={newTicket.assigned_to || ''} onChange={(e)=>setNewTicket({...newTicket, assigned_to: e.target.value || undefined})} placeholder="Optional" />
-              </div>
+            <Input placeholder="Title" value={newTicket.title} onChange={(e) => setNewTicket({ ...newTicket, title: e.target.value })} />
+            <Textarea placeholder="Description" value={newTicket.description} onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })} />
+            <div className="grid grid-cols-2 gap-3">
+              <Select value={newTicket.priority} onValueChange={(v) => setNewTicket({ ...newTicket, priority: v as any })}>
+                <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="medium">Medium</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={newTicket.category} onValueChange={(v) => setNewTicket({ ...newTicket, category: v })}>
+                <SelectTrigger><SelectValue placeholder="Category" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General</SelectItem>
+                  <SelectItem value="order">Order</SelectItem>
+                  <SelectItem value="product">Product</SelectItem>
+                  <SelectItem value="appointments">Appointments</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-            <Button onClick={handleCreateTicket}>Create</Button>
+            <Button variant="outline" onClick={() => setIsNewModalOpen(false)}>Cancel</Button>
+            <Button onClick={createTicket} disabled={!newTicket.title.trim()}>Create</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Tickets List */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Support Tickets</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {filteredTickets.map((ticket) => (
-              <div key={ticket.id} className="border rounded-lg p-4 hover:bg-gray-50">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-                      <MessageSquare className="w-6 h-6 text-blue-600" />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{ticket.ticket_number}</h3>
-                      <p className="text-sm text-gray-600">{ticket.subject}</p>
-                      <div className="flex items-center space-x-4 text-sm text-gray-600">
-                        <span className="flex items-center">
-                          <User className="w-4 h-4 mr-1" />
-                          {ticket.customer_name}
-                        </span>
-                        <span className="flex items-center">
-                          <Mail className="w-4 h-4 mr-1" />
-                          {ticket.customer_email}
-                        </span>
-                        <span className="flex items-center">
-                          <Calendar className="w-4 h-4 mr-1" />
-                          {ticket.created_date}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center space-x-4">
-                    {ticket.response_time && (
-                      <div className="text-right">
-                        <p className="text-sm font-medium text-gray-900">
-                          {ticket.response_time}
-                        </p>
-                        <p className="text-xs text-gray-600">Response</p>
-                      </div>
-                    )}
-                    <Badge className={getPriorityColor(ticket.priority)}>
-                      {ticket.priority.toUpperCase()}
-                    </Badge>
-                    <Badge className={getStatusColor(ticket.status)}>
-                      {ticket.status.replace('_', ' ').toUpperCase()}
-                    </Badge>
-                    <Badge className={getCategoryColor(ticket.category)}>
-                      {ticket.category.toUpperCase()}
-                    </Badge>
-                    <div className="flex space-x-2">
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         onClick={() => {
-                           setActiveTicket(ticket);
-                           setIsViewOpen(true);
-                         }}
-                       >
-                         <Eye className="w-4 h-4" />
-                       </Button>
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         onClick={() => {
-                           setActiveTicket(ticket);
-                           setEditData({
-                             title: ticket.subject,
-                             description: ticket.description,
-                             priority: ticket.priority,
-                             status: ticket.status,
-                             category: ticket.category,
-                           });
-                           setIsEditOpen(true);
-                         }}
-                       >
-                         <Edit className="w-4 h-4" />
-                       </Button>
-                       <Button
-                         variant="outline"
-                         size="sm"
-                         onClick={() => {
-                           setActiveTicket(ticket);
-                           setReplyMessage('');
-                           setIsReplyOpen(true);
-                         }}
-                       >
-                         <Reply className="w-4 h-4" />
-                       </Button>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="mt-4 pt-4 border-t">
-                  <p className="text-sm text-gray-600">
-                    <span className="font-medium">Description:</span> {ticket.description}
-                  </p>
-                  <div className="mt-2 flex items-center space-x-4 text-sm text-gray-600">
-                    <span className="flex items-center">
-                      <Phone className="w-4 h-4 mr-1" />
-                      {ticket.customer_phone}
-                    </span>
-                    <span className="flex items-center">
-                      <User className="w-4 h-4 mr-1" />
-                      Assigned to: {ticket.assigned_to}
-                    </span>
-                    <span className="flex items-center">
-                      <Calendar className="w-4 h-4 mr-1" />
-                      Updated: {ticket.updated_date}
-                    </span>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* View Ticket */}
-      <Dialog open={isViewOpen} onOpenChange={setIsViewOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Ticket Details</DialogTitle>
-          </DialogHeader>
-          {activeTicket && (
-            <div className="space-y-2 text-sm">
-              <div className="font-semibold">{activeTicket.ticket_number} — {activeTicket.subject}</div>
-              <div>Status: <span className={`inline-block px-2 py-0.5 rounded ${getStatusColor(activeTicket.status)}`}>{activeTicket.status.replace('_', ' ')}</span></div>
-              <div>Priority: <span className={`inline-block px-2 py-0.5 rounded ${getPriorityColor(activeTicket.priority)}`}>{activeTicket.priority}</span></div>
-              <div>Category: <span className={`inline-block px-2 py-0.5 rounded ${getCategoryColor(activeTicket.category)}`}>{activeTicket.category}</span></div>
-              <div>Customer: {activeTicket.customer_name} — {activeTicket.customer_email || 'N/A'}</div>
-              <div className="text-gray-600">{activeTicket.description}</div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Edit Ticket */}
-      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+      {/* Edit Ticket Modal */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Edit Ticket</DialogTitle>
           </DialogHeader>
+          {editingTicket && (
           <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium">Title</label>
-              <Input value={editData.title} onChange={(e) => setEditData({ ...editData, title: e.target.value })} />
+              <Input value={editingTicket.title} onChange={(e) => setEditingTicket({ ...editingTicket, title: e.target.value })} />
+              <Textarea value={editingTicket.description} onChange={(e) => setEditingTicket({ ...editingTicket, description: e.target.value })} />
+              <div className="grid grid-cols-2 gap-3">
+                <Select value={editingTicket.priority} onValueChange={(v) => setEditingTicket({ ...editingTicket, priority: v as 'low' | 'medium' | 'high' | 'urgent' })}>
+                  <SelectTrigger><SelectValue placeholder="Priority" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="medium">Medium</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={editingTicket.status} onValueChange={(v) => setEditingTicket({ ...editingTicket, status: v as 'open' | 'in_progress' | 'resolved' | 'closed' })}>
+                  <SelectTrigger><SelectValue placeholder="Status" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="open">Open</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="resolved">Resolved</SelectItem>
+                    <SelectItem value="closed">Closed</SelectItem>
+                  </SelectContent>
+                </Select>
             </div>
-            <div>
-              <label className="text-sm font-medium">Description</label>
-              <Textarea value={editData.description} onChange={(e) => setEditData({ ...editData, description: e.target.value })} />
             </div>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-              <select className="px-3 py-2 border rounded-md" value={editData.priority} onChange={(e) => setEditData({ ...editData, priority: e.target.value as any })}>
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="urgent">Urgent</option>
-              </select>
-              <select className="px-3 py-2 border rounded-md" value={editData.status} onChange={(e) => setEditData({ ...editData, status: e.target.value as any })}>
-                <option value="open">Open</option>
-                <option value="in_progress">In Progress</option>
-                <option value="resolved">Resolved</option>
-                <option value="closed">Closed</option>
-              </select>
-              <select className="px-3 py-2 border rounded-md" value={editData.category} onChange={(e) => setEditData({ ...editData, category: e.target.value })}>
-                <option value="general">General</option>
-                <option value="technical">Technical</option>
-                <option value="billing">Billing</option>
-                <option value="product">Product</option>
-              </select>
-            </div>
-          </div>
+          )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditOpen(false)}>Cancel</Button>
-            <Button
-              onClick={async () => {
-                if (!activeTicket) return;
-                try {
-                  const resp = await apiService.updateSupportTicket(String(activeTicket.id), {
-                    title: editData.title,
-                    description: editData.description,
-                    priority: editData.priority,
-                    status: editData.status,
-                    category: editData.category,
-                  });
-                  if (resp.success) {
-                    toast.success('Ticket updated');
-                    setIsEditOpen(false);
-                    fetchTickets();
-                  } else {
-                    toast.error(resp.message || 'Update failed');
-                  }
-                } catch (e) {
-                  console.error('Update ticket error', e);
-                  toast.error('Update failed');
-                }
-              }}
-            >Save</Button>
+            <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancel</Button>
+            <Button onClick={saveEdit} disabled={!editingTicket?.title?.trim()}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Reply Modal */}
-      <Dialog open={isReplyOpen} onOpenChange={setIsReplyOpen}>
+      {/* Assign Ticket Modal */}
+      <Dialog open={isAssignModalOpen} onOpenChange={setIsAssignModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Reply to Ticket</DialogTitle>
+            <DialogTitle>Assign Ticket</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <Textarea placeholder="Type your reply..." value={replyMessage} onChange={(e) => setReplyMessage(e.target.value)} />
+            <Select value={selectedAssignee} onValueChange={setSelectedAssignee}>
+              <SelectTrigger><SelectValue placeholder="Select team member" /></SelectTrigger>
+              <SelectContent>
+                {teamMembers.map((m) => (
+                  <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsReplyOpen(false)}>Cancel</Button>
-            <Button
-              onClick={async () => {
-                if (!activeTicket || !replyMessage.trim()) {
-                  toast.error('Enter a message');
-                  return;
-                }
-                try {
-                  const resp = await apiService.createTicketMessage(String(activeTicket.id), {
-                    message: replyMessage,
-                    sender_id: 1,
-                    is_internal: false,
-                  });
-                  if (resp.success) {
-                    toast.success('Reply sent');
-                    setIsReplyOpen(false);
-                    setReplyMessage('');
-                  } else {
-                    toast.error(resp.message || 'Failed to send reply');
-                  }
-                } catch (e) {
-                  console.error('Reply error', e);
-                  toast.error('Failed to send reply');
-                }
-              }}
-            >Send</Button>
+            <Button variant="outline" onClick={() => setIsAssignModalOpen(false)}>Cancel</Button>
+            <Button onClick={assignTicket} disabled={!selectedAssignee}>Assign</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

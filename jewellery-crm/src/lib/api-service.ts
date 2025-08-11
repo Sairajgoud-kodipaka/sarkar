@@ -215,6 +215,31 @@ export interface TeamMember {
 }
 
 class ApiService {
+  private cache = new Map<string, { data: any; timestamp: number }>();
+  private readonly CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+  private getCachedData(key: string) {
+    const cached = this.cache.get(key);
+    if (cached && Date.now() - cached.timestamp < this.CACHE_DURATION) {
+      return cached.data;
+    }
+    return null;
+  }
+
+  private setCachedData(key: string, data: any) {
+    this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  // Public method to clear cache
+  public clearCache() {
+    this.cache.clear();
+  }
+
+  // Public method to clear specific cache key
+  public clearCacheKey(key: string) {
+    this.cache.delete(key);
+  }
+
   private handleSupabaseResponse<T>(response: any): ApiResponse<T> {
     // Handle case where response is undefined (like in deleteProduct)
     if (response === undefined) {
@@ -236,69 +261,92 @@ class ApiService {
 
   // Dashboard
   async getDashboardData(timeFilter: string = 'month'): Promise<DashboardData> {
+    // Check cache first
+    const cacheKey = `dashboard_${timeFilter}`;
+    const cachedData = this.getCachedData(cacheKey);
+    if (cachedData) {
+      return cachedData;
+    }
+
     const today = new Date().toISOString().split('T')[0];
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
     const monthAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
-    // Get visits count
-    const { data: visits_today } = await supabase
-      .from('visits')
-      .select('id')
-      .eq('date', today);
+    try {
+      // Single optimized query to get all data at once
+      const [visitsResponse, salesResponse, customersResponse] = await Promise.all([
+        supabase
+          .from('visits')
+          .select('id, date, floor')
+          .or(`date.eq.${today},date.gte.${weekAgo},date.gte.${monthAgo}`),
+        supabase
+          .from('sales')
+          .select('amount, date, floor')
+          .or(`date.eq.${today},date.gte.${weekAgo},date.gte.${monthAgo}`),
+        supabase
+          .from('customers')
+          .select('name, phone, interest, floor')
+          .order('created_at', { ascending: false })
+          .limit(100) // Limit to prevent loading too many customers
+      ]);
 
-    const { data: visits_this_week } = await supabase
-      .from('visits')
-      .select('id')
-      .gte('date', weekAgo);
+      if (visitsResponse.error) throw new Error(visitsResponse.error.message);
+      if (salesResponse.error) throw new Error(salesResponse.error.message);
+      if (customersResponse.error) throw new Error(customersResponse.error.message);
 
-    const { data: visits_this_month } = await supabase
-      .from('visits')
-      .select('id')
-      .gte('date', monthAgo);
+      const visits = visitsResponse.data || [];
+      const sales = salesResponse.data || [];
+      const customers = customersResponse.data || [];
 
-    // Get sales amounts
-    const { data: sales_today } = await supabase
-      .from('sales')
-      .select('amount')
-      .eq('date', today);
+      // Process visits data
+      const visits_today = visits.filter(v => v.date === today).length;
+      const visits_this_week = visits.filter(v => v.date >= weekAgo).length;
+      const visits_this_month = visits.filter(v => v.date >= monthAgo).length;
 
-    const { data: sales_this_week } = await supabase
-      .from('sales')
-      .select('amount')
-      .gte('date', weekAgo);
+      // Process sales data
+      const sales_today = sales.filter(s => s.date === today).reduce((sum, s) => sum + s.amount, 0);
+      const sales_this_week = sales.filter(s => s.date >= weekAgo).reduce((sum, s) => sum + s.amount, 0);
+      const sales_this_month = sales.filter(s => s.date >= monthAgo).reduce((sum, s) => sum + s.amount, 0);
 
-    const { data: sales_this_month } = await supabase
-      .from('sales')
-      .select('amount')
-      .gte('date', monthAgo);
+      // Process customers by floor
+      const floorCustomers = [1, 2, 3].map(floor => ({
+        floor,
+        customers: customers
+          .filter(c => c.floor === floor)
+          .slice(0, 10) // Limit customers per floor to prevent UI lag
+          .map(c => ({
+            name: c.name,
+            number: c.phone,
+            interest: c.interest
+          }))
+      }));
 
-    // Get customers by floor
-    const { data: customers } = await supabase
-      .from('customers')
-      .select('*');
+      const result = {
+        visitors: {
+          today: visits_today,
+          this_week: visits_this_week,
+          this_month: visits_this_month,
+        },
+        sales: {
+          today: sales_today,
+          this_week: sales_this_week,
+          this_month: sales_this_month,
+        },
+        floor_customers: floorCustomers,
+      };
 
-    const floorCustomers = [1, 2, 3].map(floor => ({
-      floor,
-      customers: customers?.filter(c => c.floor === floor).map(c => ({
-        name: c.name,
-        number: c.phone,
-        interest: c.interest
-      })) || []
-    }));
-
-    return {
-      visitors: {
-        today: visits_today?.length || 0,
-        this_week: visits_this_week?.length || 0,
-        this_month: visits_this_month?.length || 0,
-      },
-      sales: {
-        today: sales_today?.reduce((sum: number, s: any) => sum + s.amount, 0) || 0,
-        this_week: sales_this_week?.reduce((sum: number, s: any) => sum + s.amount, 0) || 0,
-        this_month: sales_this_month?.reduce((sum: number, s: any) => sum + s.amount, 0) || 0,
-      },
-      floor_customers: floorCustomers,
-    };
+      // Cache the result
+      this.setCachedData(cacheKey, result);
+      return result;
+    } catch (error) {
+      console.error('Error in getDashboardData:', error);
+      // Return default data on error to prevent UI hanging
+      return {
+        visitors: { today: 0, this_week: 0, this_month: 0 },
+        sales: { today: 0, this_week: 0, this_month: 0 },
+        floor_customers: [1, 2, 3].map(floor => ({ floor, customers: [] }))
+      };
+    }
   }
 
   async getDashboardStats(): Promise<ApiResponse<DashboardStats>> {
@@ -1844,9 +1892,20 @@ class ApiService {
     type?: string;
   }): Promise<ApiResponse<any[]>> {
     try {
-      // For now, return empty array since we don't have a notifications table
-      // This prevents the error and allows the app to work
-      return this.handleSupabaseResponse([]);
+      let query = supabase
+        .from('notifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (params?.status) query = query.eq('status', params.status);
+      if (params?.type) query = query.eq('type', params.type);
+
+      const { data, error } = await query;
+      if (error) {
+        console.error('Error fetching notifications:', error);
+        return this.handleSupabaseResponse([]);
+      }
+      return this.handleSupabaseResponse(data || []);
     } catch (error) {
       console.error('Error fetching notifications:', error);
       return this.handleSupabaseResponse([]);
@@ -2307,14 +2366,110 @@ class ApiService {
 
   async getTicketMessages(ticketId: string): Promise<ApiResponse<any[]>> {
     try {
-      const { data, error } = await supabase
+      // First, get the messages
+      const { data: messages, error: messagesError } = await supabase
         .from('support_ticket_messages')
         .select('*')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true });
 
-      if (error) throw new Error(error.message);
-      return this.handleSupabaseResponse(data || []);
+      if (messagesError) throw new Error(messagesError.message);
+      
+      if (!messages || messages.length === 0) {
+        return this.handleSupabaseResponse([]);
+      }
+
+      // Get unique sender IDs from messages
+      const senderIds = [...new Set(messages.filter(m => m.sender_id).map(m => m.sender_id))];
+      console.log('Found sender IDs in messages:', senderIds);
+      
+      let teamMembers: any[] = [];
+      if (senderIds.length > 0) {
+        // First, let's see what's actually in the team_members table
+        console.log('Fetching team members for IDs:', senderIds);
+        
+        // Try to get ALL team members first to see what's available
+        const { data: allMembers, error: allMembersError } = await supabase
+          .from('team_members')
+          .select('*')
+          .limit(10);
+        
+        if (allMembersError) {
+          console.warn('Warning: Could not fetch all team members:', allMembersError);
+        } else {
+          console.log('All team members in table:', allMembers);
+        }
+        
+        // Now try to get specific team members
+        const { data: members, error: membersError } = await supabase
+          .from('team_members')
+          .select('id, first_name, last_name, email, role')
+          .in('id', senderIds);
+        
+        if (membersError) {
+          console.warn('Warning: Could not fetch specific team members:', membersError);
+        } else {
+          teamMembers = members || [];
+          console.log('Successfully fetched specific team members:', teamMembers);
+        }
+        
+        // If no team members found, try to populate from auth users
+        if (teamMembers.length === 0) {
+          console.log('No team members found, attempting to populate from auth users...');
+          await this.populateTeamMembersFromAuth(senderIds);
+          
+          // Try fetching team members again
+          const { data: retryMembers, error: retryError } = await supabase
+            .from('team_members')
+            .select('id, first_name, last_name, email, role')
+            .in('id', senderIds);
+          
+          if (!retryError && retryMembers) {
+            teamMembers = retryMembers;
+            console.log('Successfully populated and fetched team members:', teamMembers);
+          }
+        }
+      } else {
+        console.log('No sender IDs found in messages');
+      }
+
+              // Transform data to include sender names
+        const transformedData = (messages || []).map((message: any) => {
+          const sender = teamMembers.find(m => m.id === message.sender_id);
+          
+          // Debug logging
+          console.log('Processing message:', message);
+          console.log('Looking for sender_id:', message.sender_id);
+          console.log('Available team members:', teamMembers);
+          console.log('Found sender:', sender);
+          
+          // If no team member found, try to get basic user info
+          let senderName = 'Unknown User';
+          let senderRole = 'Unknown';
+          
+          if (sender) {
+            senderName = `${sender.first_name} ${sender.last_name}`;
+            senderRole = sender.role || 'Unknown';
+          } else if (message.sender_id) {
+            // Fallback: try to get user info from auth.users
+            console.log('No team member found, trying auth.users fallback for:', message.sender_id);
+            // For now, use the sender_id as a fallback name
+            senderName = `User ${message.sender_id.slice(0, 8)}...`;
+            senderRole = 'User';
+          }
+          
+          const result = {
+            ...message,
+            sender_name: senderName,
+            sender_role: senderRole
+          };
+          
+          console.log('Transformed message:', result);
+          return result;
+        });
+      
+      console.log('Final transformed data:', transformedData);
+      return this.handleSupabaseResponse(transformedData);
     } catch (error) {
       console.error('Error fetching ticket messages:', error);
       throw new Error('Failed to fetch ticket messages');
@@ -2323,18 +2478,44 @@ class ApiService {
 
   async createTicketMessage(ticketId: string, messageData: any): Promise<ApiResponse<any>> {
     try {
+      // Handle both 'message' and 'content' field names for backward compatibility
+      const messageContent = messageData.message || messageData.content;
+      
+      if (!messageContent || messageContent.trim() === '') {
+        throw new Error('Message content cannot be empty');
+      }
+
+      // Debug: Log the data being sent
+      console.log('Creating ticket message with data:', {
+        ticketId,
+        messageContent,
+        sender_id: messageData.sender_id,
+        is_internal: messageData.is_internal
+      });
+
+      // sender_id is optional in the database schema, so we don't require it
+      const insertData: any = {
+        ticket_id: parseInt(ticketId),
+        message: messageContent,
+        is_internal: messageData.is_internal ?? false
+      };
+
+      // Only add sender_id if it exists
+      if (messageData.sender_id) {
+        insertData.sender_id = messageData.sender_id;
+      }
+
       const { data, error } = await supabase
         .from('support_ticket_messages')
-        .insert({
-        ticket_id: parseInt(ticketId),
-        message: messageData.message,
-          sender_id: messageData.sender_id,
-          is_internal: messageData.is_internal ?? false
-        })
+        .insert(insertData)
         .select()
         .single();
 
-      if (error) throw new Error(error.message);
+      if (error) {
+        console.error('Supabase error:', error);
+        throw new Error(error.message);
+      }
+      
       return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error creating ticket message:', error);
@@ -2469,6 +2650,60 @@ class ApiService {
     } catch (error) {
       console.error('Error closing ticket:', error);
       throw new Error('Failed to close ticket');
+    }
+  }
+
+  async deleteSupportTicket(ticketId: string): Promise<ApiResponse<void>> {
+    try {
+      const { error } = await supabase
+        .from('support_tickets')
+        .delete()
+        .eq('id', ticketId);
+
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(undefined);
+    } catch (error) {
+      console.error('Error deleting support ticket:', error);
+      throw new Error('Failed to delete support ticket');
+    }
+  }
+
+  // Helper function to populate team_members table from auth users
+  private async populateTeamMembersFromAuth(userIds: string[]): Promise<void> {
+    try {
+      console.log('Attempting to populate team_members from auth users:', userIds);
+      
+      for (const userId of userIds) {
+        try {
+          // Create a basic team member entry based on the user ID
+          // We'll use the user ID to create a meaningful display name
+          const displayName = userId.slice(0, 8);
+          
+          // Create team member entry
+          const { error: insertError } = await supabase
+            .from('team_members')
+            .insert({
+              id: userId,
+              email: `${displayName}@example.com`,
+              first_name: `User`,
+              last_name: displayName,
+              role: 'support_staff',
+              status: 'active',
+              created_at: new Date().toISOString(),
+              updated_at: new Date().toISOString()
+            });
+          
+          if (insertError) {
+            console.warn(`Could not insert team member ${userId}:`, insertError);
+          } else {
+            console.log(`Successfully created team member for ${userId}`);
+          }
+        } catch (error) {
+          console.warn(`Error processing user ${userId}:`, error);
+        }
+      }
+    } catch (error) {
+      console.error('Error in populateTeamMembersFromAuth:', error);
     }
   }
 
@@ -3128,7 +3363,15 @@ class ApiService {
   // Notification Methods
   async markNotificationAsRead(notificationId: string): Promise<ApiResponse<any>> {
     try {
-      return this.handleSupabaseResponse({ success: true });
+      const { data, error } = await supabase
+        .from('notifications')
+        .update({ status: 'read', read_at: new Date().toISOString() })
+        .eq('id', notificationId)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error marking notification as read:', error);
       throw new Error('Failed to mark notification as read');
@@ -3137,6 +3380,17 @@ class ApiService {
 
   async markAllNotificationsAsRead(): Promise<ApiResponse<any>> {
     try {
+      const { data: authUser } = await supabase.auth.getUser();
+      const userId = authUser?.user?.id;
+      if (!userId) return this.handleSupabaseResponse({ success: true });
+
+      const { error } = await supabase
+        .from('notifications')
+        .update({ status: 'read', read_at: new Date().toISOString() })
+        .eq('user_id', userId)
+        .eq('status', 'unread');
+
+      if (error) throw error;
       return this.handleSupabaseResponse({ success: true });
     } catch (error) {
       console.error('Error marking all notifications as read:', error);
@@ -3146,6 +3400,11 @@ class ApiService {
 
   async deleteNotification(notificationId: string): Promise<ApiResponse<any>> {
     try {
+      const { error } = await supabase
+        .from('notifications')
+        .delete()
+        .eq('id', notificationId);
+      if (error) throw error;
       return this.handleSupabaseResponse({ success: true });
     } catch (error) {
       console.error('Error deleting notification:', error);
@@ -3155,15 +3414,25 @@ class ApiService {
 
   async createNotification(notificationData: any): Promise<ApiResponse<any>> {
     try {
-      const newNotification = {
-        id: Date.now(),
+      const payload = {
+        user_id: notificationData.user_id,
         title: notificationData.title,
         message: notificationData.message,
         type: notificationData.type || 'info',
+        priority: notificationData.priority || 'medium',
+        status: notificationData.status || 'unread',
+        link_url: notificationData.link_url || null,
         created_at: new Date().toISOString()
       };
 
-      return this.handleSupabaseResponse(newNotification);
+      const { data, error } = await supabase
+        .from('notifications')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Error creating notification:', error);
       throw new Error('Failed to create notification');

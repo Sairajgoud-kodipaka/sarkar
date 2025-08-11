@@ -7,11 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Eye, EyeOff, Lock, Mail, Building2, User } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useAuthInitialization } from '@/hooks/useAuth';
 import { auth } from '@/lib/supabase';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login, signUp, isLoading, error, user, setError, initialize } = useAuth();
+  const { isInitialized, isLoading: isAuthLoading } = useAuthInitialization();
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,23 +24,31 @@ export default function LoginPage() {
   const [role, setRole] = useState<'business_admin' | 'floor_manager' | 'inhouse_sales'>('inhouse_sales');
   const [floor, setFloor] = useState(1);
   const [loginError, setLoginError] = useState('');
-
-  useEffect(() => {
-    // Initialize auth state
-    initialize();
-  }, [initialize]);
+  const [isRetrying, setIsRetrying] = useState(false);
 
   const isRedirectingRef = useRef(false);
 
   useEffect(() => {
-    if (!isLoading && user && !isRedirectingRef.current) {
+    console.log('🔐 Login page: Auth state changed:', { user, isLoading: isAuthLoading, isRedirectingRef: isRedirectingRef.current });
+    
+    if (!isAuthLoading && user && !isRedirectingRef.current) {
       const userRole = user.user_metadata?.role as string | undefined;
+      console.log('🔐 Login page: User authenticated with role:', userRole);
+      
       if (userRole) {
         isRedirectingRef.current = true;
+        console.log('🔐 Login page: Redirecting to role-based route...');
         redirectBasedOnRole(userRole);
       }
     }
-  }, [user, isLoading]);
+  }, [user, isAuthLoading]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isRedirectingRef.current = false;
+    };
+  }, []);
 
   const roleRoutes: Record<string, string> = {
     business_admin: '/business-admin/dashboard',
@@ -129,6 +139,30 @@ export default function LoginPage() {
     }
   };
 
+  const handleRetryConnection = async () => {
+    setIsRetrying(true);
+    setError(null);
+    try {
+      await initialize();
+    } catch (error) {
+      console.error('Retry failed:', error);
+    } finally {
+      setIsRetrying(false);
+    }
+  };
+
+  // Show loading while auth is initializing
+  if (!isInitialized || isAuthLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Initializing authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
@@ -146,6 +180,27 @@ export default function LoginPage() {
           </CardHeader>
           
           <CardContent className="space-y-6">
+            {/* Connection Status */}
+            {!isInitialized && (
+              <div className="text-center p-3 bg-blue-50 border border-blue-200 rounded-md">
+                <div className="flex items-center justify-center space-x-2">
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                  <span className="text-sm text-blue-700">Initializing connection...</span>
+                </div>
+              </div>
+            )}
+            
+            {error && !loginError && (
+              <div className="text-center p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                <div className="flex items-center justify-center space-x-2">
+                  <svg className="h-4 w-4 text-yellow-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L3.732 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                  </svg>
+                  <span className="text-sm text-yellow-700">Connection issue detected</span>
+                </div>
+              </div>
+            )}
+
             {/* Auth Form */}
             <form onSubmit={isSignUp ? handleSignUp : handleLogin} className="space-y-4">
               {isSignUp && (
@@ -274,10 +329,21 @@ export default function LoginPage() {
                         <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                       </svg>
                     </div>
-                    <div className="ml-3">
+                    <div className="ml-3 flex-1">
                       <p className="text-sm font-medium text-red-800">
                         {loginError || error}
                       </p>
+                      {error && !loginError && (
+                        <div className="mt-2">
+                          <button
+                            onClick={handleRetryConnection}
+                            disabled={isRetrying}
+                            className="text-xs bg-red-100 hover:bg-red-200 text-red-800 px-2 py-1 rounded border border-red-300 disabled:opacity-50"
+                          >
+                            {isRetrying ? 'Retrying...' : 'Retry Connection'}
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

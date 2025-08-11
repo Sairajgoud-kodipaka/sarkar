@@ -3,6 +3,7 @@ import { Lexend } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/sonner";
 import { AppProviders } from "@/components/providers/AppProviders";
+import { PerformanceMonitor } from "@/components/ui/PerformanceMonitor";
 
 const lexend = Lexend({
   subsets: ["latin"],
@@ -82,6 +83,7 @@ export default function RootLayout({
             },
           }}
         />
+        <PerformanceMonitor />
       </body>
     </html>
   );

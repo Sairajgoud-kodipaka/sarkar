@@ -108,19 +108,7 @@ export const NotificationManager: React.FC<NotificationManagerProps> = ({
     };
   }, []);
 
-  // Add keyboard shortcut to dismiss all notifications (Escape key)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape' && activeToasts.length > 0) {
-        dismissAllToasts();
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, [activeToasts.length]);
+  // Remove global key listener to avoid interfering with input focus
 
   const handleToastClose = async (notificationId: string) => {
     // Remove from active toasts immediately

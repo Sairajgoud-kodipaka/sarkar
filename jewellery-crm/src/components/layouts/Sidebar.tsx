@@ -205,10 +205,7 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
   const { user, logout } = useAuth();
   const router = useRouter();
 
-  // Debug: Log user object
-  console.log('Sidebar - User object:', user);
-  console.log('Sidebar - User role:', user?.user_metadata?.role);
-  console.log('Sidebar - User email:', user?.email);
+  // Avoid noisy console logs in production that can slow down the app
 
   // If no user, don't render sidebar
   if (!user) {

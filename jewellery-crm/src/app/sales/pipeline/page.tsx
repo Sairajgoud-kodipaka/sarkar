@@ -17,6 +17,7 @@ import { apiService } from '@/lib/api-service';
 import { DragEvent, useCallback } from 'react';
 import { toast } from 'sonner';
 import { AddDealModal } from '@/components/pipeline/AddDealModal';
+import { useFloor } from '@/contexts/FloorContext';
 import { DealDetailModal } from '@/components/pipeline/DealDetailModal';
 
 interface PipelineDeal {
@@ -38,6 +39,7 @@ interface PipelineDeal {
 }
 
 export default function SalesPipelinePage() {
+  const { currentFloor, isFloorManager } = useFloor();
   const [deals, setDeals] = useState<PipelineDeal[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +50,7 @@ export default function SalesPipelinePage() {
 
   useEffect(() => {
     fetchPipelineData();
-  }, [selectedStage]);
+  }, [selectedStage, currentFloor?.name]);
 
   const fetchPipelineData = async () => {
     try {
@@ -56,7 +58,8 @@ export default function SalesPipelinePage() {
       setError(null);
       
       const response = await apiService.getDeals({
-        stage: selectedStage === 'all' ? undefined : selectedStage
+        stage: selectedStage === 'all' ? undefined : selectedStage,
+        floor: isFloorManager && currentFloor ? Number(currentFloor.name?.match(/\d+/)?.[0]) : undefined,
       });
       
       if (response.success) {

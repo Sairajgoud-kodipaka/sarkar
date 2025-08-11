@@ -1,43 +1,40 @@
 'use client';
 import React, { useState, useEffect } from 'react';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { Plus, Download, Eye, Loader2, Search, X } from 'lucide-react';
+import { Plus, Download, Eye, Loader2, Search, X, Filter, MoreHorizontal, Edit, Trash2, User, Calendar, Tag, AlertCircle, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
-interface SupportTicket {
-  id: number;
-  ticket_id: string;
+interface Ticket {
+  id: string;
   title: string;
-  summary: string;
+  customer: {
+    name: string;
+    email: string;
+    avatar: string;
+  };
   category: string;
-  priority: string;
-  status: string;
-  created_by: number;
-  assigned_to?: number;
-  tenant: number;
-  created_at: string;
-  updated_at: string;
-  resolved_at?: string;
-  closed_at?: string;
-  is_urgent: boolean;
-  requires_callback: boolean;
-  callback_phone?: string;
-  callback_preferred_time?: string;
+  priority: 'low' | 'medium' | 'high' | 'urgent';
+  status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  assignedTo: string;
+  createdAt: string;
+  lastUpdated: string;
+  description: string;
 }
 
 export default function SupportTicketsPage() {
   const router = useRouter();
   const { isAuthenticated, user, isHydrated } = useAuth();
-  const [tickets, setTickets] = useState<SupportTicket[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -48,13 +45,12 @@ export default function SupportTicketsPage() {
   // Form state for creating new ticket
   const [newTicket, setNewTicket] = useState({
     title: '',
-    summary: '',
+    description: '',
+    priority: 'medium' as 'low' | 'medium' | 'high' | 'urgent',
     category: 'general',
-    priority: 'medium',
-    is_urgent: false,
-    requires_callback: false,
-    callback_phone: '',
-    callback_preferred_time: '',
+    customer_id: undefined as number | undefined,
+    assigned_to: '' as string | undefined,
+    floor: undefined as number | undefined,
   });
 
   useEffect(() => {
@@ -104,13 +100,12 @@ export default function SupportTicketsPage() {
         setShowCreateModal(false);
         setNewTicket({
           title: '',
-          summary: '',
-          category: 'general',
+          description: '',
           priority: 'medium',
-          is_urgent: false,
-          requires_callback: false,
-          callback_phone: '',
-          callback_preferred_time: '',
+          category: 'general',
+          customer_id: undefined,
+          assigned_to: '',
+          floor: undefined,
         });
         fetchTickets(); // Refresh the list
       } else {
@@ -124,7 +119,7 @@ export default function SupportTicketsPage() {
     }
   };
 
-  const handleViewTicket = (ticketId: number) => {
+  const handleViewTicket = (ticketId: string) => {
     router.push(`/business-admin/support/tickets/${ticketId}`);
   };
 
@@ -182,7 +177,7 @@ export default function SupportTicketsPage() {
 
   const filteredTickets = tickets.filter(ticket => {
     const matchesSearch = searchTerm === '' || 
-      ticket.ticket_id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      ticket.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
       ticket.title.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesStatus = statusFilter === 'all' || ticket.status === statusFilter;
@@ -242,13 +237,13 @@ export default function SupportTicketsPage() {
                   />
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="summary">Description *</Label>
+                  <Label htmlFor="description">Description *</Label>
                   <Textarea
-                    id="summary"
+                    id="description"
                     placeholder="Detailed description of the issue"
                     rows={4}
-                    value={newTicket.summary}
-                    onChange={(e) => setNewTicket({ ...newTicket, summary: e.target.value })}
+                    value={newTicket.description}
+                    onChange={(e) => setNewTicket({ ...newTicket, description: e.target.value })}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
@@ -270,7 +265,7 @@ export default function SupportTicketsPage() {
                   </div>
                   <div className="grid gap-2">
                     <Label htmlFor="priority">Priority</Label>
-                    <Select value={newTicket.priority} onValueChange={(value) => setNewTicket({ ...newTicket, priority: value })}>
+                                         <Select value={newTicket.priority} onValueChange={(value: 'low' | 'medium' | 'high' | 'urgent') => setNewTicket({ ...newTicket, priority: value })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -283,46 +278,19 @@ export default function SupportTicketsPage() {
                     </Select>
                   </div>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="is_urgent"
-                    checked={newTicket.is_urgent}
-                    onChange={(e) => setNewTicket({ ...newTicket, is_urgent: e.target.checked })}
-                  />
-                  <Label htmlFor="is_urgent">Mark as urgent</Label>
+                <div className="grid gap-2">
+                  <Label htmlFor="assigned_to">Assign To</Label>
+                  <Select value={newTicket.assigned_to || ''} onValueChange={(value) => setNewTicket({ ...newTicket, assigned_to: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select team member" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="">Unassigned</SelectItem>
+                      <SelectItem value="user1">User 1</SelectItem>
+                      <SelectItem value="user2">User 2</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="requires_callback"
-                    checked={newTicket.requires_callback}
-                    onChange={(e) => setNewTicket({ ...newTicket, requires_callback: e.target.checked })}
-                  />
-                  <Label htmlFor="requires_callback">Request callback</Label>
-                </div>
-                {newTicket.requires_callback && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="grid gap-2">
-                      <Label htmlFor="callback_phone">Phone Number</Label>
-                      <Input
-                        id="callback_phone"
-                        placeholder="+91-9876543210"
-                        value={newTicket.callback_phone}
-                        onChange={(e) => setNewTicket({ ...newTicket, callback_phone: e.target.value })}
-                      />
-                    </div>
-                    <div className="grid gap-2">
-                      <Label htmlFor="callback_preferred_time">Preferred Time</Label>
-                      <Input
-                        id="callback_preferred_time"
-                        placeholder="Morning (9 AM - 12 PM)"
-                        value={newTicket.callback_preferred_time}
-                        onChange={(e) => setNewTicket({ ...newTicket, callback_preferred_time: e.target.value })}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
               <div className="flex justify-end gap-2">
                 <Button variant="outline" onClick={() => setShowCreateModal(false)}>
@@ -330,7 +298,7 @@ export default function SupportTicketsPage() {
                 </Button>
                 <Button 
                   onClick={handleCreateTicket}
-                  disabled={!newTicket.title || !newTicket.summary || creatingTicket}
+                  disabled={!newTicket.title || !newTicket.description || creatingTicket}
                 >
                   {creatingTicket ? (
                     <>
@@ -401,11 +369,11 @@ export default function SupportTicketsPage() {
               ) : (
                 filteredTickets.map((ticket) => (
                   <tr key={ticket.id} className="border-t border-border hover:bg-gray-50">
-                    <td className="px-4 py-2 font-medium text-text-primary">{ticket.ticket_id}</td>
+                    <td className="px-4 py-2 font-medium text-text-primary">{ticket.id}</td>
                     <td className="px-4 py-2 text-text-primary">{ticket.title}</td>
                     <td className="px-4 py-2">{getStatusBadge(ticket.status)}</td>
                     <td className="px-4 py-2">{getPriorityBadge(ticket.priority)}</td>
-                    <td className="px-4 py-2 text-text-secondary">{formatDate(ticket.created_at)}</td>
+                                         <td className="px-4 py-2 text-text-secondary">{formatDate(ticket.createdAt)}</td>
                     <td className="px-4 py-2">
                       <Button 
                         variant="ghost" 

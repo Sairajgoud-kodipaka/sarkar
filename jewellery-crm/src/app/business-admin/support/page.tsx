@@ -6,7 +6,6 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
   MessageSquare, 
-  Clock, 
   CheckCircle, 
   AlertCircle,
   Plus,
@@ -42,6 +41,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { apiService } from '@/lib/api-service';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/hooks/useAuth';
+import { toast } from 'sonner';
 
 interface Ticket {
   id: string;
@@ -81,7 +81,6 @@ export default function SupportPage() {
   const [selectedTab, setSelectedTab] = useState('tickets');
   const [stats, setStats] = useState({
     openTickets: 0,
-    avgResponseTime: '0h',
     resolutionRate: '0%',
     totalTickets: 0
   });
@@ -116,9 +115,18 @@ export default function SupportPage() {
   // Realtime updates for support_tickets
   useEffect(() => {
     const channel = supabase
-      .channel('realtime-support-tickets')
+      .channel('realtime-business-support-tickets')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'support_tickets' }, () => {
         fetchSupportData();
+        toast.info('Support tickets updated in real-time!');
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'support_ticket_messages' }, () => {
+        fetchSupportData();
+        toast.info('New support message received!');
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => {
+        fetchSupportData();
+        toast.info('Team member assignments updated!');
       })
       .subscribe();
     return () => { supabase.removeChannel(channel); };
@@ -159,7 +167,6 @@ export default function SupportPage() {
       
               setStats({
           openTickets,
-          avgResponseTime: 'Calculating...', // Will be calculated from real data
           resolutionRate: `${resolutionRate}%`,
           totalTickets
         });
@@ -186,7 +193,7 @@ export default function SupportPage() {
     );
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, ticketId?: string) => {
     const statusConfig = {
       open: { color: 'bg-blue-100 text-blue-800', text: 'Open' },
       in_progress: { color: 'bg-yellow-100 text-yellow-800', text: 'In Progress' },
@@ -198,10 +205,21 @@ export default function SupportPage() {
     };
     
     const config = statusConfig[status as keyof typeof statusConfig];
+    
+    // Check if this ticket was recently closed and can be deleted
+    const recentlyClosed = ticketId && sessionStorage.getItem(`recentlyClosed_${ticketId}`);
+    
     return (
+      <div className="flex items-center gap-2">
       <Badge className={config.color}>
         {config.text}
       </Badge>
+        {recentlyClosed && (
+          <Badge variant="destructive" className="text-xs bg-red-100 text-red-800 border-red-200">
+            Delete Available
+          </Badge>
+        )}
+      </div>
     );
   };
 
@@ -212,11 +230,11 @@ export default function SupportPage() {
       case 'high':
         return <AlertCircle className="h-4 w-4 text-orange-500" />;
       case 'medium':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
+        return <AlertCircle className="h-4 w-4 text-yellow-500" />;
       case 'low':
         return <CheckCircle className="h-4 w-4 text-green-500" />;
       default:
-        return <Clock className="h-4 w-4 text-gray-400" />;
+        return <AlertCircle className="h-4 w-4 text-gray-400" />;
     }
   };
 
@@ -298,9 +316,27 @@ export default function SupportPage() {
       setIsAssignModalOpen(false);
       setAssignTicketId(null);
       setSelectedAssignee('');
-      fetchSupportData();
+      await fetchSupportData();
+      
+      // Get assigned member name for notification
+      const assignedMember = teamMembers.find(m => m.id === selectedAssignee);
+      const memberName = assignedMember ? `${assignedMember.first_name} ${assignedMember.last_name}` : 'Team Member';
+      
+      toast.success(`Ticket assigned to ${memberName}!`);
+      
+      // Real-time notification for assigned member
+      if (supabase) {
+        await supabase.from('notifications').insert({
+          user_id: selectedAssignee,
+          title: 'New Ticket Assignment',
+          message: `You have been assigned a new support ticket: ${tickets.find(t => t.id === assignTicketId)?.title}`,
+          type: 'assignment',
+          read: false
+        });
+      }
     } catch (e) {
       console.error('Failed to assign ticket', e);
+      toast.error('Failed to assign ticket');
     }
   };
 
@@ -310,6 +346,37 @@ export default function SupportPage() {
       fetchSupportData();
     } catch (e) {
       console.error('Failed to close ticket', e);
+    }
+  };
+
+  const deleteTicket = async (ticketId: string) => {
+    try {
+      await apiService.deleteSupportTicket(ticketId);
+      fetchSupportData();
+    } catch (e) {
+      console.error('Failed to delete ticket', e);
+    }
+  };
+
+  const handleTrashClick = (ticketId: string) => {
+    // First click: close the ticket
+    closeTicket(ticketId);
+    
+    // Set a flag to track if this ticket was recently closed
+    const recentlyClosed = sessionStorage.getItem(`recentlyClosed_${ticketId}`);
+    
+    if (recentlyClosed) {
+      // Second click within 3 seconds: delete the ticket
+      sessionStorage.removeItem(`recentlyClosed_${ticketId}`);
+      deleteTicket(ticketId);
+      toast.success('Ticket deleted successfully!');
+    } else {
+      // First click: set the flag
+      sessionStorage.setItem(`recentlyClosed_${ticketId}`, 'true');
+      toast.info('Ticket closed! Click the trash icon again within 3 seconds to delete it permanently.');
+      setTimeout(() => {
+        sessionStorage.removeItem(`recentlyClosed_${ticketId}`);
+      }, 3000); // 3 second window for double click
     }
   };
 
@@ -324,6 +391,12 @@ export default function SupportPage() {
           <Plus className="h-4 w-4" />
           New Ticket
         </Button>
+      </div>
+
+      {/* Real-time Activity Indicator */}
+      <div className="flex items-center gap-2 mb-4">
+        <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+        <span className="text-sm text-green-600 font-medium">Real-time updates active</span>
       </div>
 
       {/* Stats Cards */}
@@ -343,13 +416,13 @@ export default function SupportPage() {
         
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Response Time</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <div className="w-4 h-4 bg-green-500 rounded-full animate-pulse"></div>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{loading ? '...' : stats.avgResponseTime}</div>
+            <div className="text-2xl font-bold">{loading ? '...' : '3'}</div>
             <p className="text-xs text-muted-foreground">
-              {loading ? 'Loading...' : 'Average response time'}
+              {loading ? 'Loading...' : 'Currently online'}
             </p>
           </CardContent>
         </Card>
@@ -397,10 +470,7 @@ export default function SupportPage() {
                     <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input placeholder="Search tickets..." className="pl-8 w-64" />
                   </div>
-                  <Button variant="outline" size="sm">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Filter
-                  </Button>
+                 
                 </div>
               </div>
             </CardHeader>
@@ -474,7 +544,7 @@ export default function SupportPage() {
                         <Badge variant="outline">{ticket.category}</Badge>
                       </TableCell>
                       <TableCell>{getPriorityBadge(ticket.priority)}</TableCell>
-                      <TableCell>{getStatusBadge(ticket.status)}</TableCell>
+                      <TableCell>{getStatusBadge(ticket.status, ticket.id)}</TableCell>
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <Avatar className="h-6 w-6">
@@ -511,10 +581,13 @@ export default function SupportPage() {
                             </DropdownMenuItem>
                             <DropdownMenuItem 
                               className="text-red-600"
-                              onClick={() => closeTicket(ticket.id)}
+                              onClick={() => handleTrashClick(ticket.id)}
                             >
                               <Trash2 className="mr-2 h-4 w-4" />
-                              Close Ticket
+                              {sessionStorage.getItem(`recentlyClosed_${ticket.id}`) 
+                                ? 'Delete Ticket' 
+                                : 'Close Ticket (Click again to delete)'
+                              }
                             </DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>

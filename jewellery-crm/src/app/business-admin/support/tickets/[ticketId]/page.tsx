@@ -1,5 +1,5 @@
 'use client';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -59,6 +59,8 @@ interface TicketMessage {
   message_type: string;
   created_at: string;
   updated_at: string;
+  sender_name?: string;
+  sender_role?: string;
 }
 
 export default function TicketDetailPage() {
@@ -74,20 +76,7 @@ export default function TicketDetailPage() {
   const [newMessage, setNewMessage] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
 
-  useEffect(() => {
-    if (!isAuthenticated) {
-      console.log('User not authenticated, redirecting to login');
-      router.push('/login');
-      return;
-    }
-    
-    if (ticketId) {
-      console.log('User authenticated, fetching ticket details:', { user, isAuthenticated });
-      fetchTicketDetails();
-    }
-  }, [ticketId, isAuthenticated, user, router]);
-
-  const fetchTicketDetails = async () => {
+  const fetchTicketDetails = useCallback(async () => {
     try {
       setLoading(true);
       const [ticketResponse, messagesResponse] = await Promise.all([
@@ -109,6 +98,9 @@ export default function TicketDetailPage() {
       if (messagesResponse.success && messagesResponse.data) {
         const messagesData = Array.isArray(messagesResponse.data) ? messagesResponse.data : (messagesResponse.data as any).results || [];
         console.log('Messages data:', messagesData);
+        console.log('First message structure:', messagesData[0]);
+        console.log('Message sender_name:', messagesData[0]?.sender_name);
+        console.log('Message sender_role:', messagesData[0]?.sender_role);
         setMessages(messagesData);
       } else {
         console.log('No messages data, setting empty array');
@@ -120,15 +112,34 @@ export default function TicketDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [ticketId]);
+
+  useEffect(() => {
+    if (!isAuthenticated) {
+      console.log('User not authenticated, redirecting to login');
+      router.push('/login');
+      return;
+    }
+    
+    if (ticketId) {
+      console.log('User authenticated, fetching ticket details:', { user, isAuthenticated });
+      fetchTicketDetails();
+    }
+  }, [ticketId, isAuthenticated, user, router, fetchTicketDetails]);
 
   const handleSendMessage = async () => {
     if (!newMessage.trim()) return;
     
     try {
       setSendingMessage(true);
+      
+      // Debug: Log user object to see its structure
+      console.log('User object for sender_id:', user);
+      console.log('User ID:', user?.id);
+      
       const response = await apiService.createTicketMessage(ticketId, {
         content: newMessage,
+        sender_id: user?.id, // Add sender_id from current user
         is_internal: false,
         message_type: 'text'
       });
@@ -304,7 +315,7 @@ export default function TicketDetailPage() {
                   <Tag className="w-4 h-4 text-gray-500" />
                   <span className="text-sm font-medium text-gray-700">Category</span>
                 </div>
-                <span className="text-sm text-gray-900 capitalize">{ticket.category.replace('_', ' ')}</span>
+                <span className="text-sm text-gray-900 capitalize">{ticket.category ? ticket.category.replace('_', ' ') : 'Uncategorized'}</span>
               </div>
 
               <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
@@ -372,15 +383,31 @@ export default function TicketDetailPage() {
                             ? 'bg-purple-100 text-purple-600'
                             : 'bg-gray-100 text-gray-600'
                         }`}>
-                          <User className="w-4 h-4" />
+                          {message.is_system_message ? (
+                            <User className="w-4 h-4" />
+                          ) : message.sender_name ? (
+                            <span className="text-xs font-medium">
+                              {message.sender_name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                            </span>
+                          ) : (
+                            <User className="w-4 h-4" />
+                          )}
                         </div>
                         <div>
                           <span className="text-sm font-medium text-gray-900">
-                            {message.is_system_message ? 'System' : 'You'}
+                            {message.is_system_message 
+                              ? 'System' 
+                              : message.sender_name || 'Unknown User'
+                            }
                           </span>
                           {message.is_internal && (
                             <Badge variant="secondary" className="ml-2 text-xs bg-purple-100 text-purple-700">
                               Internal
+                            </Badge>
+                          )}
+                          {message.sender_role && message.sender_role !== 'Unknown' && (
+                            <Badge variant="outline" className="ml-2 text-xs">
+                              {message.sender_role}
                             </Badge>
                           )}
                         </div>
@@ -389,9 +416,9 @@ export default function TicketDetailPage() {
                         {formatDate(message.created_at)}
                       </span>
                     </div>
-                    <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                      {message.content}
-                    </div>
+                                            <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+                          {message.message || message.content}
+                        </div>
                   </div>
                 ))
               )}

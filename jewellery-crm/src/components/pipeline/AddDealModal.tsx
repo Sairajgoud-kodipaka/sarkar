@@ -8,6 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Card } from "@/components/ui/card";
 import { apiService, Client } from "@/lib/api-service";
+import { useFloor } from "@/contexts/FloorContext";
 import { Plus, Calendar, DollarSign, User, Building } from "lucide-react";
 
 interface AddDealModalProps {
@@ -19,7 +20,7 @@ interface AddDealModalProps {
 interface DealFormData {
   title: string;
   client: string;
-  expected_value: string;
+  amount: string;
   probability: string;
   stage: string;
   expected_close_date: string;
@@ -29,10 +30,11 @@ interface DealFormData {
 }
 
 export function AddDealModal({ open, onClose, onDealCreated }: AddDealModalProps) {
+  const { currentFloor, isFloorManager } = useFloor();
   const [formData, setFormData] = useState<DealFormData>({
     title: '',
     client: '',
-    expected_value: '',
+    amount: '',
     probability: '10',
     stage: 'lead',
     expected_close_date: '',
@@ -70,27 +72,27 @@ export function AddDealModal({ open, onClose, onDealCreated }: AddDealModalProps
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!formData.title || !formData.client || !formData.expected_value) {
+    if (!formData.title || !formData.client || !formData.amount) {
       alert('Please fill in all required fields');
       return;
     }
 
     try {
       setSaving(true);
-      
-             const pipelineData = {
-         title: formData.title,
-         client_id: parseInt(formData.client),
-         expected_value: parseFloat(formData.expected_value),
-         probability: parseInt(formData.probability),
-         stage: formData.stage,
-         expected_close_date: formData.expected_close_date || null,
-         notes: formData.notes || null,
-         next_action: formData.next_action || null,
-         next_action_date: formData.next_action_date || null,
-       };
+      const payload = {
+        title: formData.title,
+        customer_id: parseInt(formData.client),
+        customer_name: (clients.find(c => c.id.toString() === formData.client)?.name
+          || `${clients.find(c => c.id.toString() === formData.client)?.first_name || ''} ${clients.find(c => c.id.toString() === formData.client)?.last_name || ''}`.trim()) as string,
+        amount: parseFloat(formData.amount),
+        probability: parseInt(formData.probability),
+        stage: formData.stage,
+        expected_close_date: formData.expected_close_date || null,
+        notes: formData.notes || null,
+        floor: isFloorManager && currentFloor ? Number(currentFloor.name?.match(/\d+/)?.[0]) || undefined : undefined,
+      } as any;
 
-      const response = await apiService.createSalesPipeline(pipelineData);
+      const response = await apiService.createDeal(payload);
       
       if (response.success) {
         console.log('Deal created successfully');
@@ -100,7 +102,7 @@ export function AddDealModal({ open, onClose, onDealCreated }: AddDealModalProps
         setFormData({
           title: '',
           client: '',
-          expected_value: '',
+          amount: '',
           probability: '10',
           stage: 'lead',
           expected_close_date: '',
@@ -181,14 +183,14 @@ export function AddDealModal({ open, onClose, onDealCreated }: AddDealModalProps
                   <SelectContent>
                     {loading ? (
                       <SelectItem value="loading" disabled>Loading clients...</SelectItem>
-                    ) : clients.length === 0 ? (
-                      <SelectItem value="no-clients" disabled>No clients available</SelectItem>
                     ) : (
-                      clients.map((client) => (
-                        <SelectItem key={client.id} value={client.id.toString()}>
-                          {client.first_name} {client.last_name}
-                        </SelectItem>
-                      ))
+                      clients
+                        .filter((c) => (c.name || `${c.first_name || ''} ${c.last_name || ''}`.trim()).length > 0)
+                        .map((client) => (
+                          <SelectItem key={client.id} value={client.id.toString()}>
+                            {client.name || `${client.first_name} ${client.last_name}`}
+                          </SelectItem>
+                        ))
                     )}
                   </SelectContent>
                 </Select>
@@ -204,12 +206,12 @@ export function AddDealModal({ open, onClose, onDealCreated }: AddDealModalProps
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="expected_value">Expected Value (₹) *</Label>
+                <Label htmlFor="amount">Amount (₹) *</Label>
                 <Input
-                  id="expected_value"
+                  id="amount"
                   type="number"
-                  value={formData.expected_value}
-                  onChange={(e) => handleInputChange('expected_value', e.target.value)}
+                  value={formData.amount}
+                  onChange={(e) => handleInputChange('amount', e.target.value)}
                   placeholder="0.00"
                   min="0"
                   step="0.01"

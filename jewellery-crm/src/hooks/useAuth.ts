@@ -14,6 +14,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { auth } from '@/lib/supabase';
 import { User } from '@supabase/supabase-js';
+import { useEffect } from 'react';
 
 interface AuthState {
   user: User | null;
@@ -22,6 +23,8 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   isHydrated: boolean;
+  isInitialized: boolean;
+  _authSubscription?: any; // For cleanup of auth state change listener
 }
 
 interface AuthActions {
@@ -33,6 +36,7 @@ interface AuthActions {
   setError: (error: string | null) => void;
   setLoading: (loading: boolean) => void;
   initialize: () => Promise<void>;
+  cleanup: () => void;
 }
 
 export const useAuth = create<AuthState & AuthActions>()(
@@ -44,33 +48,123 @@ export const useAuth = create<AuthState & AuthActions>()(
       isLoading: false,
       error: null,
       isHydrated: false,
+      isInitialized: false,
 
       initialize: async () => {
-        try {
-          set({ isLoading: true });
-          const { session, error } = await auth.getSession();
-          
-          if (error) {
-            console.error('Session error:', error);
-            set({ isLoading: false });
-            return;
-          }
+        // Prevent multiple initializations
+        if (get().isInitialized) return;
 
-          if (session?.user) {
-            set({
-              user: session.user,
-              session,
-              isAuthenticated: true,
-              isLoading: false,
-              error: null,
+        const maxRetries = 2;
+        let retryCount = 0;
+
+        const attemptInitialization = async (): Promise<void> => {
+          try {
+            set({ isLoading: true });
+            
+            // Increase timeout to 10 seconds to prevent premature timeouts
+            const timeoutPromise = new Promise((_, reject) => {
+              setTimeout(() => reject(new Error('Auth initialization timeout - check network connection')), 10000);
             });
-          } else {
-            set({ isLoading: false });
+            
+            const initPromise = (async () => {
+              try {
+                // Get current session with better error handling
+                const { session, error } = await auth.getSession();
+                
+                if (error) {
+                  set({ 
+                    isLoading: false, 
+                    isHydrated: true,
+                    isInitialized: true,
+                    error: error.message 
+                  });
+                  return;
+                }
+
+                if (session?.user) {
+                  set({
+                    user: session.user,
+                    session,
+                    isAuthenticated: true,
+                    isLoading: false,
+                    isHydrated: true,
+                    isInitialized: true,
+                    error: null,
+                  });
+                } else {
+                  set({ 
+                    isLoading: false, 
+                    isHydrated: true,
+                    isInitialized: true,
+                    user: null,
+                    session: null,
+                    isAuthenticated: false 
+                  });
+                }
+                // Set up auth state change listener (only once)
+                const { data: { subscription } } = auth.onAuthStateChange(async (event, session) => {
+                  if (event === 'SIGNED_IN' && session?.user) {
+                    set({
+                      user: session.user,
+                      session,
+                      isAuthenticated: true,
+                      error: null,
+                    });
+                  } else if (event === 'SIGNED_OUT') {
+                    set({
+                      user: null,
+                      session: null,
+                      isAuthenticated: false,
+                      error: null,
+                    });
+                  } else if (event === 'TOKEN_REFRESHED' && session?.user) {
+                    set({
+                      user: session.user,
+                      session,
+                      isAuthenticated: true,
+                      error: null,
+                    });
+                  }
+                });
+
+                // Store subscription for cleanup
+                set({ 
+                  // @ts-ignore - storing subscription for cleanup
+                  _authSubscription: subscription 
+                });
+
+              } catch (sessionError) {
+                throw sessionError; // Re-throw to trigger retry
+              }
+            })();
+            
+            // Race between timeout and initialization
+            await Promise.race([initPromise, timeoutPromise]);
+
+          } catch (error) {
+            
+            if (retryCount < maxRetries) {
+              retryCount++;
+              // Wait 2 seconds before retry (increased from 1 second)
+              await new Promise(resolve => setTimeout(resolve, 2000));
+              return attemptInitialization();
+            } else {
+              // Max retries reached, set as not authenticated
+              const errorMessage = error instanceof Error ? error.message : 'Unknown initialization error';
+              set({ 
+                isLoading: false, 
+                isHydrated: true,
+                isInitialized: true,
+                user: null,
+                session: null,
+                isAuthenticated: false,
+                error: `Initialization failed after ${maxRetries + 1} attempts: ${errorMessage}`
+              });
+            }
           }
-        } catch (error) {
-          console.error('Initialize error:', error);
-          set({ isLoading: false });
-        }
+        };
+
+        await attemptInitialization();
       },
 
       login: async (email: string, password: string) => {
@@ -104,7 +198,7 @@ export const useAuth = create<AuthState & AuthActions>()(
             return false;
           }
         } catch (error: any) {
-          console.error('Login error:', error);
+          
           set({
             isLoading: false,
             error: error.message || 'Login failed',
@@ -144,7 +238,7 @@ export const useAuth = create<AuthState & AuthActions>()(
             return false;
           }
         } catch (error: any) {
-          console.error('Sign up error:', error);
+          
           set({
             isLoading: false,
             error: error.message || 'Sign up failed',
@@ -156,13 +250,19 @@ export const useAuth = create<AuthState & AuthActions>()(
       logout: async () => {
         try {
           set({ isLoading: true });
+          
+          // Clean up auth subscription
+          const state = get();
+          if (state._authSubscription) {
+            // @ts-ignore
+            state._authSubscription.unsubscribe();
+          }
+          
           const { error } = await auth.signOut();
           
-          if (error) {
-            console.error('Logout error:', error);
-          }
+          if (error) {}
         } catch (error) {
-          console.error('Logout error:', error);
+          
         } finally {
           set({
             user: null,
@@ -170,6 +270,7 @@ export const useAuth = create<AuthState & AuthActions>()(
             isAuthenticated: false,
             isLoading: false,
             error: null,
+            isInitialized: false,
           });
         }
       },
@@ -189,6 +290,19 @@ export const useAuth = create<AuthState & AuthActions>()(
       setLoading: (loading: boolean) => {
         set({ isLoading: loading });
       },
+
+      cleanup: () => {
+        // Clean up auth subscription
+        const state = get();
+        if (state._authSubscription) {
+          // @ts-ignore
+          state._authSubscription.unsubscribe();
+        }
+        set({ 
+          _authSubscription: undefined,
+          isInitialized: false 
+        });
+      },
     }),
     {
       name: 'auth-storage',
@@ -205,3 +319,16 @@ export const useAuth = create<AuthState & AuthActions>()(
     }
   )
 );
+
+// Custom hook to manage auth initialization lifecycle
+export const useAuthInitialization = () => {
+  const { initialize, isInitialized, isLoading, isHydrated } = useAuth();
+
+  useEffect(() => {
+    if (!isInitialized && !isLoading && isHydrated) {
+      initialize();
+    }
+  }, [isInitialized, isLoading, isHydrated, initialize]);
+
+  return { isInitialized, isLoading, isHydrated };
+};

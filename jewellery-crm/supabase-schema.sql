@@ -139,8 +139,8 @@ CREATE TABLE public.deals (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT deals_pkey PRIMARY KEY (id),
-  CONSTRAINT deals_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
-  CONSTRAINT deals_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+  CONSTRAINT deals_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT deals_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
 );
 CREATE TABLE public.escalations (
   id integer NOT NULL DEFAULT nextval('escalations_id_seq'::regclass),
@@ -157,9 +157,9 @@ CREATE TABLE public.escalations (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT escalations_pkey PRIMARY KEY (id),
-  CONSTRAINT escalations_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id),
+  CONSTRAINT escalations_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
   CONSTRAINT escalations_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
-  CONSTRAINT escalations_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+  CONSTRAINT escalations_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id)
 );
 CREATE TABLE public.kb_articles (
   id integer NOT NULL DEFAULT nextval('kb_articles_id_seq'::regclass),
@@ -274,9 +274,9 @@ CREATE TABLE public.support_tickets (
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
   CONSTRAINT support_tickets_pkey PRIMARY KEY (id),
-  CONSTRAINT support_tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
   CONSTRAINT support_tickets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id),
-  CONSTRAINT support_tickets_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+  CONSTRAINT support_tickets_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT support_tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
 );
 CREATE TABLE public.team_members (
   id uuid NOT NULL,

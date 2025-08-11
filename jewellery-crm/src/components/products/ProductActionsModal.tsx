@@ -917,7 +917,7 @@ export default function ProductActionsModal({
         )}
       </div>
 
-      {/* Image Modal for Enlarged View */}
+      {/* Image Modal for Enlarged View with easy close */}
       {imageModalOpen && selectedImage && (
         <div 
           className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60]"
@@ -935,6 +935,8 @@ export default function ProductActionsModal({
             >
               <X className="h-6 w-6" />
             </Button>
+            {/* Add explicit close text for clarity */}
+            <div className="absolute top-2 left-2 text-white/80 text-xs">Click outside or press Close</div>
             <img
               src={selectedImage}
               alt="Enlarged product image"

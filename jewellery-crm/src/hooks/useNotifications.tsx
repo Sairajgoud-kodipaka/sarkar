@@ -5,6 +5,7 @@ import { Notification, NotificationType, NotificationPriority, NotificationStatu
 import { apiService } from '@/lib/api-service';
 import { useAuth } from './useAuth';
 import { notificationSound } from '@/lib/notification-sound';
+import { supabase } from '@/lib/supabase';
 
 // ================================
 // NOTIFICATION CONTEXT TYPES
@@ -192,8 +193,28 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
       const response = await apiService.getNotifications();
       
       if (response.success && response.data) {
-        // Extract the results array from the paginated response
-        const notifications = Array.isArray(response.data) ? response.data : (response.data as any).results || [];
+        // Normalize to app Notification shape (camelCase)
+        const raw = Array.isArray(response.data) ? response.data : (response.data as any).results || [];
+        const notifications = raw.map((n: any) => ({
+          id: String(n.id),
+          type: (n.type || 'custom') as NotificationType,
+          title: n.title || '',
+          message: n.message || '',
+          priority: (n.priority || 'medium') as NotificationPriority,
+          status: (n.status || 'unread') as NotificationStatus,
+          relatedId: n.related_id,
+          relatedType: n.related_type,
+          userId: String(n.user_id || ''),
+          tenantId: n.tenant_id ? String(n.tenant_id) : '',
+          storeId: n.store_id ? String(n.store_id) : undefined,
+          createdAt: n.created_at ? new Date(n.created_at) : new Date(),
+          readAt: n.read_at ? new Date(n.read_at) : undefined,
+          expiresAt: n.expires_at ? new Date(n.expires_at) : undefined,
+          actionUrl: n.link_url || n.action_url || undefined,
+          actionText: n.action_text || undefined,
+          metadata: n.metadata || undefined,
+          isPersistent: Boolean(n.is_persistent)
+        }));
         dispatch({ type: 'SET_NOTIFICATIONS', payload: notifications });
       } else {
         // If no data or error, set empty array
@@ -318,18 +339,57 @@ export const NotificationProvider: React.FC<NotificationProviderProps> = ({ chil
   useEffect(() => {
     if (!user || !isAuthenticated || !isHydrated) return;
 
-    // TODO: Implement WebSocket connection for real-time notifications
-    // For now, we'll use polling
-    const interval = setInterval(() => {
-      fetchNotifications();
-    }, 30000); // Poll every 30 seconds
+    // Subscribe to Supabase realtime on notifications for this user
+    try {
+      const subscription = supabase
+        .channel(`notifications-user-${user.id}`)
+        .on('postgres_changes', {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `user_id=eq.${user.id}`
+        }, (payload: any) => {
+          const n = payload.new;
+          const newItem = {
+            id: String(n.id),
+            type: (n.type || 'custom') as NotificationType,
+            title: n.title || '',
+            message: n.message || '',
+            priority: (n.priority || 'medium') as NotificationPriority,
+            status: (n.status || 'unread') as NotificationStatus,
+            userId: String(n.user_id || ''),
+            tenantId: n.tenant_id ? String(n.tenant_id) : '',
+            storeId: n.store_id ? String(n.store_id) : undefined,
+            createdAt: n.created_at ? new Date(n.created_at) : new Date(),
+            readAt: undefined,
+            actionUrl: n.link_url || undefined,
+            isPersistent: Boolean(n.is_persistent)
+          } as Notification;
+          // Push to state; reducer will handle sound
+          dispatch({ type: 'ADD_NOTIFICATION', payload: newItem });
+        })
+        .subscribe((status: any) => {
+          dispatch({ type: 'SET_CONNECTION_STATUS', payload: status === 'SUBSCRIBED' });
+        });
 
-    dispatch({ type: 'SET_CONNECTION_STATUS', payload: true });
+      // Lightweight polling as safety net every 2 minutes
+      const interval = setInterval(() => {
+        fetchNotifications();
+      }, 120000);
 
-    return () => {
-      clearInterval(interval);
-      dispatch({ type: 'SET_CONNECTION_STATUS', payload: false });
-    };
+      return () => {
+        try { supabase.removeChannel(subscription); } catch {}
+        clearInterval(interval);
+        dispatch({ type: 'SET_CONNECTION_STATUS', payload: false });
+      };
+    } catch (err) {
+      // Fallback to polling if realtime is unavailable
+      const interval = setInterval(() => {
+        fetchNotifications();
+      }, 30000);
+      dispatch({ type: 'SET_CONNECTION_STATUS', payload: true });
+      return () => clearInterval(interval);
+    }
   }, [user, isAuthenticated, isHydrated, fetchNotifications]);
 
   const contextValue: NotificationContextType = {

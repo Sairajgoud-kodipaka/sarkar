@@ -442,30 +442,14 @@ export default function FloorManagerProductsPage() {
                   <Edit className="w-4 h-4 mr-1" />
                   Edit
                 </Button>
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      <MoreHorizontal className="w-4 h-4" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end">
-                    <DropdownMenuItem onClick={() => handleProductAction(product, 'view')}>
-                      <Eye className="w-4 h-4 mr-2" />
-                      View Details
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleProductAction(product, 'edit')}>
-                      <Edit className="w-4 h-4 mr-2" />
-                      Edit Product
-                    </DropdownMenuItem>
-                    <DropdownMenuItem 
-                      onClick={() => handleProductAction(product, 'delete')}
-                      className="text-red-600"
-                    >
-                      <Trash2 className="w-4 h-4 mr-2" />
-                      Delete Product
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => handleProductAction(product, 'delete')}
+                >
+                  <Trash2 className="w-4 h-4 mr-1" />
+                  Delete
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -517,61 +501,32 @@ export default function FloorManagerProductsPage() {
 
       {/* Image Modal */}
       {imageModalOpen && selectedImage && (
-        <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
-          <div className="relative max-w-4xl max-h-4xl p-4">
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-50"
+          onClick={() => setImageModalOpen(false)}
+        >
+          <div
+            className="relative max-w-5xl max-h-[90vh] p-4"
+            onClick={(e) => e.stopPropagation()}
+          >
             <Button
-              variant="outline"
-              size="icon"
-              className="absolute top-2 right-2 bg-white"
+              variant="ghost"
+              size="sm"
+              className="absolute top-2 right-2 z-10 bg-white/20 hover:bg-white/30 text-white"
               onClick={() => setImageModalOpen(false)}
             >
-              <X className="w-4 h-4" />
+              <X className="w-5 h-5" />
             </Button>
             <img
               src={selectedImage}
               alt="Product"
-              className="max-w-full max-h-full object-contain"
+              className="max-w-full max-h-full object-contain rounded"
             />
           </div>
         </div>
       )}
 
-      {/* Global Catalogue Modal */}
-      {showGlobalCatalogue && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-4xl max-h-96 overflow-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-xl font-bold">Global Product Catalogue</h2>
-              <Button
-                variant="outline"
-                size="icon"
-                onClick={() => setShowGlobalCatalogue(false)}
-              >
-                <X className="w-4 h-4" />
-              </Button>
-            </div>
-            <div className="space-y-4">
-              <div className="grid grid-cols-3 gap-4 text-sm">
-                <div>
-                  <span className="font-medium">Total Products:</span>
-                  <span className="ml-2">{globalCatalogue?.total_products || 0}</span>
-                </div>
-                <div>
-                  <span className="font-medium">Total Stores:</span>
-                  <span className="ml-2">{globalCatalogue?.total_stores || 0}</span>
-                </div>
-                <div>
-                  <span className="font-medium">Categories:</span>
-                  <span className="ml-2">{categories.length}</span>
-                </div>
-              </div>
-              <p className="text-gray-600">
-                Global catalogue data and analytics would be displayed here.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Global Catalogue Modal - removed per requirement */}
     </div>
   );
 }

@@ -734,7 +734,7 @@ export default function ProductsPage() {
         />
       )}
 
-      {/* Image Modal */}
+      {/* Image Modal with Close */}
       {imageModalOpen && selectedImage && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="relative max-w-4xl max-h-[90vh]">

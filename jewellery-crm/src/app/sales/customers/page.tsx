@@ -122,10 +122,7 @@ export default function SalesCustomersPage() {
                 <option value="active">Active</option>
                 <option value="inactive">Inactive</option>
               </select>
-              <Button variant="outline">
-                <Filter className="w-4 h-4 mr-2" />
-                Filters
-              </Button>
+            
             </div>
           </div>
         </CardContent>

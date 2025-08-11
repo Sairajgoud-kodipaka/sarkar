@@ -111,13 +111,19 @@ export function BusinessAdminDashboard() {
   };
 
   useEffect(() => {
+    // Only fetch data once on component mount
     fetchDashboardData();
     
-    // Set up real-time updates every 30 seconds
-    const interval = setInterval(fetchDashboardData, 30000);
-    
-    return () => clearInterval(interval);
+    // Remove the 30-second polling interval to reduce unnecessary API calls
+    // Users can manually refresh if needed
   }, []);
+
+  // Add manual refresh function
+  const handleRefresh = () => {
+    // Clear cache before refreshing to get fresh data
+    apiService.clearCacheKey('dashboard_month');
+    fetchDashboardData();
+  };
 
   const toggleFloorExpansion = (floor: number) => {
     const newExpanded = new Set(expandedFloors);
@@ -231,7 +237,7 @@ export function BusinessAdminDashboard() {
           <div className="text-center max-w-md">
             <p className="text-error-red mb-4">{error}</p>
             <Button 
-              onClick={fetchDashboardData} 
+              onClick={handleRefresh} 
               className="btn-primary"
             >
               <RefreshCw className="w-4 h-4 mr-2" />
@@ -249,15 +255,18 @@ export function BusinessAdminDashboard() {
       subtitle={`Welcome back, ${user?.email?.split('@')[0] || 'Admin'}`}
       actions={
         <div className="flex items-center space-x-2">
+          <div className="text-sm text-text-secondary">
+            Last updated: {lastUpdated.toLocaleTimeString()}
+          </div>
           <Button 
             variant="outline" 
             size="sm"
-            onClick={fetchDashboardData}
+            onClick={handleRefresh}
             disabled={loading}
             className="btn-secondary hover:bg-primary-50 transition-colors duration-200"
           >
             <RefreshCw className={`w-4 h-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            {loading ? 'Refreshing...' : 'Refresh'}
           </Button>
         </div>
       }

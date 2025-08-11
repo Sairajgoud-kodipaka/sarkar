@@ -10,6 +10,112 @@ import { Loader2, X, AlertCircle, Plus } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 import { cn } from '@/lib/utils';
 
+// Module-level constants to avoid recreating large arrays/objects on each render
+const PREDEFINED_OPTIONS = {
+    metals: ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl', 'Ruby', 'Emerald', 'Sapphire', 'Mixed', 'White Gold', 'Rose Gold', 'Yellow Gold'],
+    styles: ['Traditional', 'Modern', 'Contemporary', 'Vintage', 'Art Deco', 'Minimalist', 'Bridal', 'Casual', 'Luxury', 'Ethnic', 'Fusion', 'Classic'],
+    occasions: ['Wedding', 'Engagement', 'Birthday', 'Anniversary', 'Festival', 'Graduation', 'Corporate', 'Gift', 'Self-Purchase', 'House Warming', 'Baby Shower', 'Karva Chauth', 'Raksha Bandhan', 'Diwali', 'Holi', 'Eid', 'Christmas', 'Gurpurab', 'Paryushan', 'Navratri', 'Dussehra'],
+  communities: ['Hindu', 'Muslim', 'Punjabi', 'Sindhi', 'Jain', 'Christian', 'Sikh', 'Buddhist', 'Parsi'],
+    leadSources: ['Walk-in', 'Referral', 'Social Media', 'Website', 'Advertisement', 'Exhibition', 'Cold Call', 'Return Customer', 'Online Search', 'Print Media', 'TV/Radio', 'Word of Mouth', 'Employee Referral', 'Partner Referral'],
+    reasonsForVisit: ['Browsing', 'Purchase Intent', 'Repair', 'Exchange', 'Consultation', 'Price Inquiry', 'Product Viewing', 'Custom Design', 'Maintenance', 'Insurance Claim', 'Resizing', 'Cleaning', 'Appraisal'],
+    ageGroups: ['18-25', '26-35', '36-45', '46-55', '56-65', '65+'],
+    savingSchemes: ['Active', 'Inactive', 'Completed', 'Not Interested'],
+    budgetRanges: ['Under ₹10,000', '₹10,000 - ₹25,000', '₹25,000 - ₹50,000', '₹50,000 - ₹1,00,000', '₹1,00,000 - ₹2,50,000', 'Above ₹2,50,000'],
+    cities: ['Mumbai', 'Delhi', 'Bangalore', 'Hyderabad', 'Chennai', 'Kolkata', 'Pune', 'Ahmedabad', 'Jaipur', 'Surat', 'Lucknow', 'Kanpur', 'Nagpur', 'Indore', 'Thane', 'Bhopal', 'Visakhapatnam', 'Pimpri-Chinchwad', 'Patna', 'Vadodara', 'Ghaziabad', 'Ludhiana', 'Agra', 'Nashik', 'Faridabad', 'Meerut', 'Rajkot', 'Kalyan-Dombivali', 'Vasai-Virar', 'Varanasi', 'Srinagar'],
+    states: ['Maharashtra', 'Delhi', 'Karnataka', 'Telangana', 'Tamil Nadu', 'West Bengal', 'Gujarat', 'Rajasthan', 'Uttar Pradesh', 'Madhya Pradesh', 'Andhra Pradesh', 'Punjab', 'Bihar', 'Odisha', 'Assam', 'Jharkhand', 'Chhattisgarh', 'Haryana', 'Uttarakhand', 'Himachal Pradesh', 'Jammu & Kashmir', 'Goa', 'Sikkim', 'Arunachal Pradesh', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland', 'Tripura'],
+    countries: ['India', 'USA', 'UK', 'Canada', 'Australia', 'UAE', 'Singapore', 'Germany', 'France', 'Japan'],
+    motherTongues: ['Hindi', 'English', 'Gujarati', 'Marathi', 'Punjabi', 'Bengali', 'Tamil', 'Telugu', 'Kannada', 'Malayalam', 'Urdu', 'Sanskrit', 'Sindhi', 'Konkani', 'Odia', 'Assamese', 'Manipuri', 'Khasi', 'Mizo', 'Naga'],
+    preferredOccasions: ['Wedding', 'Engagement', 'Birthday', 'Anniversary', 'Festival', 'Graduation', 'Corporate', 'Gift', 'Self-Purchase', 'House Warming', 'Baby Shower', 'Karva Chauth', 'Raksha Bandhan', 'Diwali', 'Holi', 'Eid', 'Christmas', 'Gurpurab', 'Paryushan', 'Navratri', 'Dussehra'],
+    preferredStyles: ['Traditional', 'Modern', 'Contemporary', 'Vintage', 'Art Deco', 'Minimalist', 'Bridal', 'Casual', 'Luxury', 'Ethnic', 'Fusion', 'Classic', 'Bohemian', 'Gothic', 'Renaissance', 'Baroque', 'Rococo', 'Victorian', 'Edwardian', 'Art Nouveau'],
+    preferredMetals: ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl', 'Ruby', 'Emerald', 'Sapphire', 'Mixed', 'White Gold', 'Rose Gold', 'Yellow Gold', 'Palladium', 'Titanium', 'Tungsten', 'Stainless Steel', 'Brass', 'Copper', 'Bronze', 'Aluminum'],
+    interests: ['Gold Necklace', 'Gold Ring', 'Gold Earrings', 'Gold Bracelet', 'Gold Chain', 'Gold Pendant', 'Silver Jewelry', 'Platinum Ring', 'Diamond Ring', 'Pearl Necklace', 'Ruby Ring', 'Emerald Ring', 'Sapphire Ring', 'Wedding Set', 'Engagement Ring', 'Bridal Jewelry', 'Traditional Jewelry', 'Modern Jewelry', 'Antique Jewelry', 'Custom Design', 'Jewelry Repair', 'Jewelry Exchange', 'Jewelry Consultation', 'Price Inquiry', 'Product Viewing', 'Maintenance Service'],
+    paymentPreferences: ['Cash', 'Card', 'UPI', 'Net Banking', 'EMI', 'Cheque', 'Bank Transfer', 'Digital Wallet', 'Buy Now Pay Later', 'Gold Exchange', 'Partial Payment'],
+    customerTypes: ['Individual', 'Family', 'Corporate', 'Bulk Purchase', 'Wedding Party', 'Event Organizer', 'Jewelry Designer', 'Wholesaler', 'Retailer', 'Investor'],
+    followUpPriorities: ['Low', 'Medium', 'High', 'Urgent', 'Critical'],
+    seasons: ['Spring', 'Summer', 'Monsoon', 'Autumn', 'Winter', 'Festival Season', 'Wedding Season', 'Holiday Season', 'All Year Round'],
+    designPreferences: ['Ready Made', 'Custom Design', 'Modification', 'Replica', 'Inspiration Based', 'Mix of Styles', 'Traditional with Modern Twist', 'Contemporary with Ethnic Elements', 'Minimalist', 'Ornate', 'Simple', 'Complex', 'Lightweight', 'Heavy', 'Adjustable', 'Fixed Size']
+} as const;
+
+const CATCHMENT_AREAS_MAP: { [key: string]: string[] } = {
+      'Maharashtra': [
+        'South Mumbai', 'Bandra West', 'Andheri West', 'Juhu', 'Powai', 'Worli', 'Colaba', 'Nariman Point', 'BKC', 
+        'Lower Parel', 'Mahalaxmi', 'Tardeo', 'Breach Candy', 'Altamount Road', 'Pedder Road', 'Malabar Hill', 
+        'Cuffe Parade', 'Marine Drive', 'Girgaon', 'Bandra East', 'Santacruz', 'Vile Parle', 'Andheri East', 
+        'Goregaon', 'Malad', 'Kandivali', 'Borivali', 'Dahisar', 'Thane', 'Navi Mumbai', 'Pune', 'Nashik'
+      ],
+      'Delhi': [
+        'Connaught Place', 'Khan Market', 'South Extension', 'Greater Kailash', 'Hauz Khas', 'Vasant Vihar', 
+        'Vasant Kunj', 'Dwarka', 'Rohini', 'Pitampura', 'Rajouri Garden', 'Janakpuri', 'Uttam Nagar', 
+        'Noida', 'Gurgaon', 'Faridabad', 'Ghaziabad', 'Meerut', 'Sonipat', 'Panipat'
+      ],
+      'Karnataka': [
+        'MG Road', 'Commercial Street', 'Indiranagar', 'Koramangala', 'HSR Layout', 'Whitefield', 'Electronic City', 
+        'Marathahalli', 'Bellandur', 'Sarjapur Road', 'Bannerghatta Road', 'JP Nagar', 'Jayanagar', 'Basavanagudi', 
+        'Malleshwaram', 'Rajajinagar', 'Vijayanagar', 'Hebbal', 'Yelahanka', 'Yeshwanthpur'
+      ],
+      'Telangana': [
+        'Banjara Hills', 'Jubilee Hills', 'Hitech City', 'Gachibowli', 'Madhapur', 'Kondapur', 'Kukatpally', 
+        'Miyapur', 'Dilsukhnagar', 'Secunderabad', 'Begumpet', 'Ameerpet', 'KPHB', 'Kukatpally', 'Manikonda', 
+        'Gachibowli', 'Nanakramguda', 'Financial District', 'HITEC City', 'Cyberabad'
+      ],
+      'Tamil Nadu': [
+        'T Nagar', 'Anna Nagar', 'Adyar', 'Mylapore', 'Besant Nagar', 'Alwarpet', 'Purasaiwalkam', 'Kilpauk', 
+        'Aminjikarai', 'Vadapalani', 'Ashok Nagar', 'KK Nagar', 'Vadapalani', 'Porur', 'OMR', 'ECR', 
+        'Tambaram', 'Chromepet', 'Pallavaram', 'St. Thomas Mount'
+      ],
+      'West Bengal': [
+        'Park Street', 'Camac Street', 'Elgin Road', 'Ballygunge', 'Gariahat', 'Lake Gardens', 'Jodhpur Park', 
+        'Bhowanipore', 'Alipore', 'New Alipore', 'Tollygunge', 'Behala', 'Dhakuria', 'Bansdroni', 'Garia', 
+        'Sonarpur', 'Baruipur', 'Diamond Harbour', 'Kolkata Port', 'Howrah'
+      ],
+      'Gujarat': [
+        'Navrangpura', 'Satellite', 'Vastrapur', 'Bodakdev', 'Thaltej', 'Jodhpur', 'Vejalpur', 'Gota', 
+        'Chandkheda', 'Motera', 'Sarkhej', 'Juhapura', 'Vatva', 'Naroda', 'Odhav', 'Vastral', 'Bapunagar', 
+        'Maninagar', 'Gomtipur', 'Kalupur'
+      ],
+      'Rajasthan': [
+        'C Scheme', 'Malviya Nagar', 'C-Scheme', 'Bani Park', 'Sindhi Camp', 'Station Road', 'Mansarovar', 
+        'Pratap Nagar', 'Sanganer', 'Vaishali Nagar', 'Raja Park', 'Adarsh Nagar', 'Shyam Nagar', 'Vidhyadhar Nagar', 
+        'Jhotwara', 'Amber', 'Amer', 'Nahargarh', 'Jaigarh', 'Galtaji'
+      ],
+      'Uttar Pradesh': [
+        'Gomti Nagar', 'Indira Nagar', 'Aliganj', 'Mahanagar', 'Rajajipuram', 'Vikas Nagar', 'Gomti Nagar Extension', 
+        'Jankipuram', 'Sitapur Road', 'Hardoi Road', 'Rae Bareli Road', 'Sultanpur Road', 'Pratapgarh Road', 
+        'Prayagraj Road', 'Varanasi Road', 'Gorakhpur Road', 'Bareilly Road', 'Moradabad Road', 'Aligarh Road'
+      ],
+      'Madhya Pradesh': [
+        'Vijay Nagar', 'Palasia', 'Rajendra Nagar', 'Saket', 'Arera Colony', 'Shahpura', 'Bairagarh', 
+        'Kolar Road', 'Hoshangabad Road', 'Bhopal-Indore Road', 'Raisen Road', 'Sehore Road', 'Vidisha Road', 
+        'Guna Road', 'Ashok Nagar Road', 'Gwalior Road', 'Jhansi Road', 'Sagar Road', 'Chhindwara Road'
+      ],
+      'Andhra Pradesh': [
+        'Benz Circle', 'Auto Nagar', 'One Town', 'Two Town', 'Three Town', 'Four Town', 'Five Town', 
+        'Six Town', 'Seven Town', 'Eight Town', 'Nine Town', 'Ten Town', 'Gandhi Nagar', 'Krishna Nagar', 
+        'Lakshmi Nagar', 'Saraswati Nagar', 'Durga Nagar', 'Kali Nagar', 'Brahma Nagar', 'Vishnu Nagar'
+      ],
+      'Punjab': [
+        'Sector 17', 'Sector 22', 'Sector 35', 'Sector 37', 'Sector 38', 'Sector 39', 'Sector 40', 
+        'Sector 41', 'Sector 42', 'Sector 43', 'Sector 44', 'Sector 45', 'Sector 46', 'Sector 47', 
+        'Sector 48', 'Sector 49', 'Sector 50', 'Sector 51', 'Sector 52', 'Sector 53'
+      ],
+      'Bihar': [
+        'Fraser Road', 'Beer Chand Patel Path', 'Boring Road', 'Exhibition Road', 'Station Road', 'Gandhi Maidan', 
+        'Patna Junction', 'Rajendra Nagar', 'Kankarbagh', 'Rajeev Nagar', 'Anisabad', 'Danapur', 'Phulwari Sharif', 
+        'Bihta', 'Maner', 'Fatuha', 'Bakhtiarpur', 'Barh', 'Mokama', 'Hajipur'
+      ],
+      'Odisha': [
+        'Cuttack Road', 'Bhubaneswar-Puri Road', 'Bhubaneswar-Cuttack Road', 'Khandagiri', 'Kalinga Vihar', 
+        'Sahid Nagar', 'Unit 1', 'Unit 2', 'Unit 3', 'Unit 4', 'Unit 5', 'Unit 6', 'Unit 7', 'Unit 8', 
+        'Unit 9', 'Unit 10', 'Unit 11', 'Unit 12', 'Unit 13', 'Unit 14', 'Unit 15'
+      ],
+      'Assam': [
+        'Fancy Bazaar', 'Uzan Bazaar', 'Paltan Bazaar', 'Fancy Bazaar', 'Uzan Bazaar', 'Paltan Bazaar', 
+        'Fancy Bazaar', 'Uzan Bazaar', 'Paltan Bazaar', 'Fancy Bazaar', 'Uzan Bazaar', 'Paltan Bazaar', 
+        'Fancy Bazaar', 'Uzan Bazaar', 'Paltan Bazaar', 'Fancy Bazaar', 'Uzan Bazaar', 'Paltan Bazaar', 
+        'Fancy Bazaar', 'Uzan Bazaar', 'Paltan Bazaar'
+      ]
+    };
+    
 interface AddCustomerModalProps {
   isOpen?: boolean;
   onClose?: () => void;
@@ -85,24 +191,65 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
     preferred_style: '',
     preferred_occasion: '',
     budget: '',
+    payment_preference: '',
+    season: '',
+    design_preference: '',
+    // Customer Preferences & Purchase
+    main_category: '',
+    design_selected: false,
+    wants_more_discount: false,
+    checking_other_jewellers: false,
+    felt_less_variety: false,
+    other_preferences: '',
+    actual_purchase_amount: '',
     // Follow-up & summary
     next_follow_up: '',
     summary_notes: '',
+    priority: 'Medium' as 'Low' | 'Medium' | 'High' | 'Urgent' | 'Critical',
     // Notes
     notes: '',
-  });
+    visit_time: 'morning' as 'morning' | 'afternoon' | 'evening' | 'night',
+    customer_type: 'Individual' as 'Individual' | 'Family' | 'Corporate' | 'Bulk Purchase' | 'Wedding Party' | 'Event Organizer' | 'Jewelry Designer' | 'Wholesaler' | 'Retailer' | 'Investor',
+  } as any);
 
-  // Predefined options for common fields
-  const predefinedOptions = {
-    metals: ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl', 'Ruby', 'Emerald', 'Sapphire', 'Mixed'],
-    styles: ['Traditional', 'Modern', 'Contemporary', 'Vintage', 'Art Deco', 'Minimalist', 'Bridal', 'Casual', 'Luxury'],
-    occasions: ['Wedding', 'Engagement', 'Birthday', 'Anniversary', 'Festival', 'Graduation', 'Corporate', 'Gift', 'Self-Purchase'],
-    communities: ['Gujarati', 'Marwari', 'Punjabi', 'Bengali', 'Tamil', 'Telugu', 'Kannada', 'Malayali', 'Maharashtrian', 'Rajasthani'],
-    leadSources: ['Walk-in', 'Referral', 'Social Media', 'Website', 'Advertisement', 'Exhibition', 'Cold Call', 'Return Customer'],
-    reasonsForVisit: ['Browsing', 'Purchase Intent', 'Repair', 'Exchange', 'Consultation', 'Price Inquiry', 'Product Viewing'],
-    ageGroups: ['18-25', '26-35', '36-45', '46-55', '56-65', '65+'],
-    savingSchemes: ['Monthly', 'Quarterly', 'Yearly', 'Festival', 'Wedding', 'None'],
-    budgetRanges: ['Under ₹10,000', '₹10,000 - ₹25,000', '₹25,000 - ₹50,000', '₹50,000 - ₹1,00,000', '₹1,00,000 - ₹2,50,000', 'Above ₹2,50,000']
+  // Predefined options for common fields (now static module-level constant)
+  const predefinedOptions = PREDEFINED_OPTIONS;
+
+  // Dynamic catchment areas based on selected state
+  const getCatchmentAreas = (state: string) => {
+    return CATCHMENT_AREAS_MAP[state] || [];
+  };
+
+  // Load dropdown data when modal opens
+  const loadDropdownData = async () => {
+    if (!isModalOpen) return;
+    setDropdownLoading(true);
+    try {
+      // Static states (no network)
+      setStates([...PREDEFINED_OPTIONS.states]);
+
+      // Load categories via api service (Supabase-backed)
+      const categoriesResp = await apiService.getCategories();
+      if (categoriesResp?.success && Array.isArray(categoriesResp.data)) {
+        setCategories(categoriesResp.data as Category[]);
+      } else {
+        setCategories([]);
+      }
+
+      // Load team members for "Assign To" (if available)
+      try {
+        const members = await apiService.getTeamMembers();
+        if (Array.isArray(members)) {
+          setTeamMembers(members as TeamMember[]);
+        } else {
+          setTeamMembers([]);
+        }
+      } catch {
+        setTeamMembers([]);
+      }
+    } finally {
+      setDropdownLoading(false);
+    }
   };
 
   // Load dropdown data when modal opens
@@ -112,50 +259,8 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
     }
   }, [isModalOpen]);
 
-  // Handle escape key to close modal
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isModalOpen) {
-        handleClose();
-      }
-    };
-
-    if (isModalOpen) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [isModalOpen, handleClose]);
-
-  const loadDropdownData = async () => {
-    setDropdownLoading(true);
-    try {
-      // Load team members for assignment
-      const teamResponse = await apiService.getTeamMembers();
-      if (Array.isArray(teamResponse)) {
-        setTeamMembers(teamResponse);
-      }
-
-      // Load product categories for preferences
-      const categoriesResponse = await apiService.getCategories();
-      if (categoriesResponse.success && categoriesResponse.data) {
-        setCategories(Array.isArray(categoriesResponse.data) ? categoriesResponse.data : []);
-      }
-
-      // Load cities and states from existing customer data (you can enhance this with a dedicated API)
-      const customersResponse = await apiService.getAllCustomers();
-      if (customersResponse.success && customersResponse.data) {
-        const customers = Array.isArray(customersResponse.data) ? customersResponse.data : [];
-        const uniqueCities = [...new Set(customers.filter(c => c.city && c.city.trim() !== '').map(c => c.city))];
-        const uniqueStates = [...new Set(customers.filter(c => c.state && c.state.trim() !== '').map(c => c.state))];
-        setCities(uniqueCities.sort());
-        setStates(uniqueStates.sort());
-      }
-    } catch (error) {
-      console.error('Error loading dropdown data:', error);
-    } finally {
-      setDropdownLoading(false);
-    }
-  };
+  // Remove global Escape handler to avoid any focus interference
+  // Modal is closed via the close button only
 
   // Validation rules
   const validateField = (name: string, value: any): string => {
@@ -215,14 +320,25 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
 
   // Handle field change with validation
   const handleFieldChange = (name: string, value: any) => {
-    setFormData(prev => ({ ...prev, [name]: value }));
-    
-    // Clear error when user starts typing
+    setFormData((prev: any) => ({ ...prev, [name]: value }));
+    // Clear error but do NOT mark touched on every keystroke
     if (errors[name]) {
       setErrors(prev => ({ ...prev, [name]: '' }));
     }
     
-    // Mark field as touched
+    if (name === 'state') {
+      setFormData((prev: any) => ({ ...prev, catchment_area: '' }));
+    }
+  };
+
+  // Handle boolean field change specifically for checkboxes
+  const handleBooleanFieldChange = (name: string, checked: boolean) => {
+    setFormData((prev: any) => ({ ...prev, [name]: checked }));
+    
+    if (errors[name]) {
+      setErrors(prev => ({ ...prev, [name]: '' }));
+    }
+    // Mark touched only on change (boolean fields)
     setTouched(prev => ({ ...prev, [name]: true }));
   };
 
@@ -287,9 +403,22 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
         preferred_style: '',
         preferred_occasion: '',
         budget: '',
+        payment_preference: '',
+        season: '',
+        design_preference: '',
+        main_category: '',
+        design_selected: false,
+        wants_more_discount: false,
+        checking_other_jewellers: false,
+        felt_less_variety: false,
+        other_preferences: '',
+        actual_purchase_amount: '',
         next_follow_up: '',
         summary_notes: '',
+        priority: 'Medium',
         notes: '',
+        visit_time: 'morning',
+        customer_type: 'Individual',
       });
       
       // Reset validation state
@@ -325,7 +454,92 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
     }
   };
 
-  // Simple dropdown component using Select
+  // Enhanced searchable dropdown component with keyboard shortcuts
+  const SearchableDropdown = ({ 
+    value, 
+    onValueChange, 
+    options, 
+    placeholder, 
+    label,
+    loading = false,
+    required = false,
+    error = '',
+    searchable = true
+  }: {
+    value: string;
+    onValueChange: (value: string) => void;
+    options: readonly string[];
+    placeholder: string;
+    label: string;
+    loading?: boolean;
+    required?: boolean;
+    error?: string;
+    searchable?: boolean;
+  }) => {
+    const [searchTerm, setSearchTerm] = useState('');
+    
+    // Ensure unique, non-empty options and then filter by search term
+    const uniqueOptions = Array.from(new Set(options.filter(o => !!o && o.trim() !== '')));
+    const filteredOptions = uniqueOptions.filter(option => 
+      option.toLowerCase().includes(searchTerm.toLowerCase())
+    );
+
+    return (
+      <div className="space-y-2">
+        <Label className={cn(required && "after:content-['*'] after:ml-0.5 after:text-red-500")}>
+          {label}
+        </Label>
+        <div className="relative">
+          <Select 
+            value={value || ''} 
+            onValueChange={onValueChange} 
+            disabled={loading}
+          >
+            <SelectTrigger className={cn(error && "border-red-500 focus:ring-red-500")}>
+              <SelectValue placeholder={placeholder} />
+            </SelectTrigger>
+            <SelectContent className="max-h-60 w-full min-w-[200px]">
+              {searchable && (
+                <div className="p-2 border-b">
+                  <Input
+                    placeholder="Search options..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              )}
+              <div className="max-h-48 overflow-y-auto">
+                {filteredOptions.length > 0 ? (
+                  filteredOptions.map((option, idx) => (
+                    <SelectItem 
+                      key={`${option}-${idx}`} 
+                      value={option} 
+                      className="cursor-pointer hover:bg-gray-100"
+                    >
+                      {option}
+                    </SelectItem>
+                  ))
+                ) : (
+                  <div className="p-2 text-sm text-gray-500 text-center">
+                    No options found
+                  </div>
+                )}
+              </div>
+            </SelectContent>
+          </Select>
+        </div>
+        {error && (
+          <div className="flex items-center gap-2 text-sm text-red-500">
+            <AlertCircle className="h-4 w-4" />
+            {error}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Simple dropdown component for basic selections
   const SimpleDropdown = ({ 
     value, 
     onValueChange, 
@@ -338,27 +552,28 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
   }: {
     value: string;
     onValueChange: (value: string) => void;
-    options: string[];
+    options: readonly string[];
     placeholder: string;
     label: string;
     loading?: boolean;
     required?: boolean;
     error?: string;
   }) => {
-    // Filter out empty strings and undefined values
-    const validOptions = options.filter(option => option && option.trim() !== '');
-    
     return (
       <div className="space-y-2">
         <Label className={cn(required && "after:content-['*'] after:ml-0.5 after:text-red-500")}>
           {label}
         </Label>
-        <Select value={value || undefined} onValueChange={onValueChange} disabled={loading}>
+        <Select 
+          value={value || ''} 
+          onValueChange={onValueChange} 
+          disabled={loading}
+        >
           <SelectTrigger className={cn(error && "border-red-500 focus:ring-red-500")}>
             <SelectValue placeholder={placeholder} />
           </SelectTrigger>
           <SelectContent>
-            {validOptions.map((option) => (
+            {options.map((option) => (
               <SelectItem key={option} value={option}>
                 {option}
               </SelectItem>
@@ -410,8 +625,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
           onBlur={() => handleFieldBlur(name)}
           placeholder={placeholder}
           className={cn(
-            error && isTouched && "border-red-500 focus:ring-red-500",
-            "transition-colors"
+            error && isTouched && "border-red-500 focus:ring-red-500"
           )}
           {...props}
         />
@@ -437,8 +651,8 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
       
       {/* Custom Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex sm:items-center items-end sm:justify-center justify-center z-50 sm:py-0 py-4">
+          <div className="bg-white w-full sm:max-w-4xl sm:rounded-lg rounded-t-2xl sm:mx-4 mx-0 p-6 sm:max-h-[90vh] h-[92dvh] sm:h-auto overflow-y-auto shadow-xl">
             <div className="flex justify-between items-center mb-4">
               <h2 className="text-xl font-semibold">Add New Customer / Visit</h2>
               <Button 
@@ -455,47 +669,168 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
               <div className="border rounded-lg p-4">
                 <div className="font-semibold mb-4">Customer Details</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormInput
-                    name="first_name"
-                    label="First Name"
+                  <div className="space-y-2">
+                    <Label 
+                      htmlFor="first_name" 
+                      className="after:content-['*'] after:ml-0.5 after:text-red-500"
+                    >
+                      First Name
+                    </Label>
+                    <Input
+                      id="first_name"
+                      type="text"
+                      value={formData.first_name || ''}
+                      onChange={(e) => handleFieldChange('first_name', e.target.value)}
+                      onBlur={() => handleFieldBlur('first_name')}
                     placeholder="e.g., Priya"
-                    required
-                  />
-                  <FormInput
-                    name="last_name"
-                    label="Last Name"
+                      className={cn(
+                        errors.first_name && touched.first_name && "border-red-500 focus:ring-red-500"
+                      )}
+                    />
+                    {errors.first_name && touched.first_name && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.first_name}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="last_name">Last Name</Label>
+                    <Input
+                      id="last_name"
+                      type="text"
+                      value={formData.last_name || ''}
+                      onChange={(e) => handleFieldChange('last_name', e.target.value)}
+                      onBlur={() => handleFieldBlur('last_name')}
                     placeholder="e.g., Sharma"
-                  />
-                  <FormInput
-                    name="phone"
-                    label="Phone"
+                      className={cn(
+                        errors.last_name && touched.last_name && "border-red-500 focus:ring-red-500"
+                      )}
+                    />
+                    {errors.last_name && touched.last_name && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.last_name}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone" className="after:content-['*'] after:ml-0.5 after:text-red-500">Phone</Label>
+                    <Input
+                      id="phone"
+                      type="text"
+                      value={formData.phone || ''}
+                      onChange={(e) => handleFieldChange('phone', e.target.value)}
+                      onBlur={() => handleFieldBlur('phone')}
                     placeholder="+91 98XXXXXX00"
-                    required
-                  />
-                  <FormInput
-                    name="email"
-                    label="Email"
+                      className={cn(
+                        errors.phone && touched.phone && "border-red-500 focus:ring-red-500"
+                      )}
+                    />
+                    {errors.phone && touched.phone && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.phone}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
                     type="email"
+                      value={formData.email || ''}
+                      onChange={(e) => handleFieldChange('email', e.target.value)}
+                      onBlur={() => handleFieldBlur('email')}
                     placeholder="priya@example.com"
-                  />
-                  <FormInput
-                    name="interest"
+                      className={cn(
+                        errors.email && touched.email && "border-red-500 focus:ring-red-500"
+                      )}
+                    />
+                    {errors.email && touched.email && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.email}
+                      </div>
+                    )}
+                  </div>
+                  <SimpleDropdown
+                    value={formData.interest}
+                    onValueChange={(value: string) => handleFieldChange('interest', value)}
+                    options={predefinedOptions.interests}
+                    placeholder="Select interest"
                     label="Interest"
-                    placeholder="e.g., Gold Necklace"
                     required
+                    error={errors.interest && touched.interest ? errors.interest : ''}
                   />
-                  <FormInput
-                    name="visited_date"
-                    label="Visited Date"
+                  <div className="space-y-2">
+                    <Label htmlFor="visited_date" className="after:content-['*'] after:ml-0.5 after:text-red-500">Visited Date</Label>
+                    <Input
+                      id="visited_date"
                     type="date"
-                    required
-                  />
+                      value={formData.visited_date || ''}
+                      onChange={(e) => handleFieldChange('visited_date', e.target.value)}
+                      onBlur={() => handleFieldBlur('visited_date')}
+                      className={cn(
+                        errors.visited_date && touched.visited_date && "border-red-500 focus:ring-red-500"
+                      )}
+                    />
+                    {errors.visited_date && touched.visited_date && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.visited_date}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Visit Time</Label>
+                    <Select 
+                      value={formData.visit_time || 'morning'} 
+                      onValueChange={(value) => handleFieldChange('visit_time', value)}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select time" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="morning">Morning (9 AM - 12 PM)</SelectItem>
+                        <SelectItem value="afternoon">Afternoon (12 PM - 4 PM)</SelectItem>
+                        <SelectItem value="evening">Evening (4 PM - 8 PM)</SelectItem>
+                        <SelectItem value="night">Night (8 PM - 9 PM)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Customer Type</Label>
+                    <Select 
+                      value={formData.customer_type || 'Individual'} 
+                      onValueChange={(value) => handleFieldChange('customer_type', value)}
+                    >
+                      <SelectTrigger className={cn(
+                        errors.customer_type && touched.customer_type && "border-red-500 focus:ring-red-500"
+                      )}>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {predefinedOptions.customerTypes.map((type) => (
+                          <SelectItem key={type} value={type}>
+                            {type}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.customer_type && touched.customer_type && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.customer_type}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
                   <div className="space-y-2">
                     <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Floor</Label>
                     <Select 
-                      value={formData.floor.toString()} 
+                      value={formData.floor?.toString() || '1'} 
                       onValueChange={(v) => handleFieldChange('floor', parseInt(v))}
                     >
                       <SelectTrigger className={cn(
@@ -519,7 +854,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                   <div className="space-y-2">
                     <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Status</Label>
                     <Select 
-                      value={formData.status} 
+                      value={formData.status || 'lead'} 
                       onValueChange={(value) => handleFieldChange('status', value)}
                     >
                       <SelectTrigger className={cn(
@@ -575,39 +910,48 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
               <div className="border rounded-lg p-4">
                 <div className="font-semibold mb-4">Address</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormInput
-                    name="address"
-                    label="Street Address"
+                  <div className="space-y-2">
+                    <Label htmlFor="address">Street Address</Label>
+                    <Input
+                      id="address"
+                      type="text"
+                      value={formData.address || ''}
+                      onChange={(e) => handleFieldChange('address', e.target.value)}
+                      onBlur={() => handleFieldBlur('address')}
                     placeholder="123, Diamond Lane"
                   />
-                  <SimpleDropdown
+                  </div>
+                  <SearchableDropdown
                     value={formData.city}
-                    onValueChange={(value) => handleFieldChange('city', value)}
-                    options={cities}
+                    onValueChange={(value: string) => handleFieldChange('city', value)}
+                    options={predefinedOptions.cities}
                     placeholder="Enter or select city"
                     label="City"
                     loading={dropdownLoading}
                     error={errors.city && touched.city ? errors.city : ''}
                   />
-                  <SimpleDropdown
+                  <SearchableDropdown
                     value={formData.state}
-                    onValueChange={(value) => handleFieldChange('state', value)}
-                    options={states}
+                    onValueChange={(value: string) => handleFieldChange('state', value)}
+                    options={predefinedOptions.states}
                     placeholder="Enter or select state"
                     label="State"
                     loading={dropdownLoading}
                     error={errors.state && touched.state ? errors.state : ''}
                   />
-                  <FormInput
-                    name="country"
+                  <SearchableDropdown
+                    value={formData.country}
+                    onValueChange={(value: string) => handleFieldChange('country', value)}
+                    options={predefinedOptions.countries}
+                    placeholder="Select country"
                     label="Country"
-                    placeholder="India"
-                    readOnly
                   />
-                  <FormInput
-                    name="catchment_area"
+                  <SearchableDropdown
+                    value={formData.catchment_area}
+                    onValueChange={(value: string) => handleFieldChange('catchment_area', value)}
+                    options={getCatchmentAreas(formData.state)}
+                    placeholder="Select catchment area"
                     label="Catchment Area"
-                    placeholder="South Mumbai, Bandra West"
                   />
                 </div>
               </div>
@@ -616,25 +960,38 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
               <div className="border rounded-lg p-4">
                 <div className="font-semibold mb-4">Personal</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormInput
-                    name="date_of_birth"
-                    label="Date of Birth"
+                  <div className="space-y-2">
+                    <Label htmlFor="date_of_birth">Date of Birth</Label>
+                    <Input
+                      id="date_of_birth"
                     type="date"
-                  />
-                  <FormInput
-                    name="anniversary_date"
-                    label="Anniversary Date"
+                      value={formData.date_of_birth || ''}
+                      onChange={(e) => handleFieldChange('date_of_birth', e.target.value)}
+                      onBlur={() => handleFieldBlur('date_of_birth')}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="anniversary_date">Anniversary Date</Label>
+                    <Input
+                      id="anniversary_date"
                     type="date"
+                      value={formData.anniversary_date || ''}
+                      onChange={(e) => handleFieldChange('anniversary_date', e.target.value)}
+                      onBlur={() => handleFieldBlur('anniversary_date')}
                   />
+                  </div>
                   <SimpleDropdown
                     value={formData.community}
-                    onValueChange={(value) => handleFieldChange('community', value)}
+                    onValueChange={(value: string) => handleFieldChange('community', value)}
                     options={predefinedOptions.communities}
                     placeholder="Select community"
                     label="Community"
                   />
-                  <FormInput
-                    name="mother_tongue"
+                  <SimpleDropdown
+                    value={formData.mother_tongue}
+                    onValueChange={(value: string) => handleFieldChange('mother_tongue', value)}
+                    options={predefinedOptions.motherTongues}
+                    placeholder="Select mother tongue"
                     label="Mother Tongue / Sub-community"
                   />
                 </div>
@@ -646,28 +1003,28 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <SimpleDropdown
                     value={formData.reason_for_visit}
-                    onValueChange={(value) => handleFieldChange('reason_for_visit', value)}
+                    onValueChange={(value: string) => handleFieldChange('reason_for_visit', value)}
                     options={predefinedOptions.reasonsForVisit}
                     placeholder="Select reason"
                     label="Reason for Visit"
                   />
                   <SimpleDropdown
                     value={formData.lead_source}
-                    onValueChange={(value) => handleFieldChange('lead_source', value)}
+                    onValueChange={(value: string) => handleFieldChange('lead_source', value)}
                     options={predefinedOptions.leadSources}
                     placeholder="Select source"
                     label="Lead Source"
                   />
                   <SimpleDropdown
                     value={formData.age_of_end_user}
-                    onValueChange={(value) => handleFieldChange('age_of_end_user', value)}
+                    onValueChange={(value: string) => handleFieldChange('age_of_end_user', value)}
                     options={predefinedOptions.ageGroups}
                     placeholder="Select age group"
                     label="Age of End-User"
                   />
                   <SimpleDropdown
                     value={formData.saving_scheme}
-                    onValueChange={(value) => handleFieldChange('saving_scheme', value)}
+                    onValueChange={(value: string) => handleFieldChange('saving_scheme', value)}
                     options={predefinedOptions.savingSchemes}
                     placeholder="Select scheme"
                     label="Saving Scheme"
@@ -681,32 +1038,215 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <SimpleDropdown
                     value={formData.preferred_metal}
-                    onValueChange={(value) => handleFieldChange('preferred_metal', value)}
-                    options={predefinedOptions.metals}
+                    onValueChange={(value: string) => handleFieldChange('preferred_metal', value)}
+                    options={predefinedOptions.preferredMetals}
                     placeholder="Select metal"
                     label="Preferred Metal"
                   />
                   <SimpleDropdown
                     value={formData.preferred_style}
-                    onValueChange={(value) => handleFieldChange('preferred_style', value)}
-                    options={predefinedOptions.styles}
+                    onValueChange={(value: string) => handleFieldChange('preferred_style', value)}
+                    options={predefinedOptions.preferredStyles}
                     placeholder="Select style"
                     label="Preferred Style"
                   />
                   <SimpleDropdown
                     value={formData.preferred_occasion}
-                    onValueChange={(value) => handleFieldChange('preferred_occasion', value)}
-                    options={predefinedOptions.occasions}
+                    onValueChange={(value: string) => handleFieldChange('preferred_occasion', value)}
+                    options={predefinedOptions.preferredOccasions}
                     placeholder="Select occasion"
                     label="Occasion"
                   />
                   <SimpleDropdown
                     value={formData.budget}
-                    onValueChange={(value) => handleFieldChange('budget', value)}
+                    onValueChange={(value: string) => handleFieldChange('budget', value)}
                     options={predefinedOptions.budgetRanges}
                     placeholder="Select budget range"
                     label="Budget"
                   />
+                  <SimpleDropdown
+                    value={formData.payment_preference}
+                    onValueChange={(value: string) => handleFieldChange('payment_preference', value)}
+                    options={predefinedOptions.paymentPreferences}
+                    placeholder="Select payment preference"
+                    label="Payment Preference"
+                  />
+                  <SimpleDropdown
+                    value={formData.season}
+                    onValueChange={(value: string) => handleFieldChange('season', value)}
+                    options={predefinedOptions.seasons}
+                    placeholder="Select season"
+                    label="Season"
+                  />
+                  <SimpleDropdown
+                    value={formData.design_preference}
+                    onValueChange={(value: string) => handleFieldChange('design_preference', value)}
+                    options={predefinedOptions.designPreferences}
+                    placeholder="Select design preference"
+                    label="Design Preference"
+                  />
+                </div>
+              </div>
+
+              {/* Customer Preferences & Purchase */}
+              <div className="border rounded-lg p-4">
+                <div className="font-semibold mb-4">Customer Preferences & Purchase</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <SimpleDropdown
+                    value={formData.main_category}
+                    onValueChange={(value: string) => handleFieldChange('main_category', value)}
+                    options={categories.map(cat => cat.name)}
+                    placeholder="Select main category"
+                    label="Main Category"
+                    loading={dropdownLoading}
+                    error={errors.main_category && touched.main_category ? errors.main_category : ''}
+                  />
+                  <div className="space-y-2">
+                    <Label>Design Selected</Label>
+                    <Select 
+                      value={formData.design_selected ? 'yes' : 'no'} 
+                      onValueChange={(value) => handleBooleanFieldChange('design_selected', value === 'yes')}
+                    >
+                      <SelectTrigger className={cn(
+                        errors.design_selected && touched.design_selected && "border-red-500 focus:ring-red-500"
+                      )}>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {formData.design_selected && (
+                      <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                        <div className="text-green-800 font-medium">Design Selected</div>
+                        <div className="text-green-700 text-sm">This customer has selected a design. Enter the purchase amount below.</div>
+                      </div>
+                    )}
+                    {errors.design_selected && touched.design_selected && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.design_selected}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Wants More Discount</Label>
+                    <Select 
+                      value={formData.wants_more_discount ? 'yes' : 'no'} 
+                      onValueChange={(value) => handleBooleanFieldChange('wants_more_discount', value === 'yes')}
+                    >
+                      <SelectTrigger className={cn(
+                        errors.wants_more_discount && touched.wants_more_discount && "border-red-500 focus:ring-red-500"
+                      )}>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {formData.wants_more_discount && (
+                      <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
+                        <div className="text-orange-800 font-medium">Discount Requested</div>
+                        <div className="text-orange-700 text-sm">Customer is asking for additional discount. Consider negotiation strategies.</div>
+                      </div>
+                    )}
+                    {errors.wants_more_discount && touched.wants_more_discount && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.wants_more_discount}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Checking Other Jewellers</Label>
+                    <Select 
+                      value={formData.checking_other_jewellers ? 'yes' : 'no'} 
+                      onValueChange={(value) => handleBooleanFieldChange('checking_other_jewellers', value === 'yes')}
+                    >
+                      <SelectTrigger className={cn(
+                        errors.checking_other_jewellers && touched.checking_other_jewellers && "border-red-500 focus:ring-red-500"
+                      )}>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {formData.checking_other_jewellers && (
+                      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
+                        <div className="text-yellow-800 font-medium">Competition Check</div>
+                        <div className="text-yellow-700 text-sm">Customer is comparing with other jewellers. Focus on unique value propositions.</div>
+                      </div>
+                    )}
+                    {errors.checking_other_jewellers && touched.checking_other_jewellers && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.checking_other_jewellers}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Felt Less Variety</Label>
+                    <Select 
+                      value={formData.felt_less_variety ? 'yes' : 'no'} 
+                      onValueChange={(value) => handleBooleanFieldChange('felt_less_variety', value === 'yes')}
+                    >
+                      <SelectTrigger className={cn(
+                        errors.felt_less_variety && touched.felt_less_variety && "border-red-500 focus:ring-red-500"
+                      )}>
+                        <SelectValue placeholder="Select" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="yes">Yes</SelectItem>
+                        <SelectItem value="no">No</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    {formData.felt_less_variety && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                        <div className="text-blue-800 font-medium">Variety Concern</div>
+                        <div className="text-blue-700 text-sm">Customer feels limited variety. Show more options or suggest custom designs.</div>
+                      </div>
+                    )}
+                    {errors.felt_less_variety && touched.felt_less_variety && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.felt_less_variety}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Other Preferences (if any)</Label>
+                    <Textarea 
+                      rows={2} 
+                      value={formData.other_preferences} 
+                      onChange={(e) => handleFieldChange('other_preferences', e.target.value)} 
+                      placeholder="Specify other preferences" 
+                    />
+                    <div className="text-xs text-gray-500 text-right">
+                      {formData.other_preferences.length}/200 characters
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Actual Purchase Amount (₹)</Label>
+                    <Input 
+                      type="number" 
+                      value={formData.actual_purchase_amount} 
+                      onChange={(e) => handleFieldChange('actual_purchase_amount', e.target.value)} 
+                      placeholder="e.g., 75000" 
+                    />
+                    {formData.actual_purchase_amount && (
+                      <div className="bg-green-50 border border-green-200 rounded-md p-3">
+                        <div className="text-green-800 font-medium">Converted Sale!</div>
+                        <div className="text-green-700 text-sm">This will be counted as realized revenue.</div>
+                      </div>
+                    )}
+                    <div className="text-xs text-gray-500 text-right">
+                      {formData.actual_purchase_amount.length}/10 characters
+                    </div>
+                  </div>
                 </div>
               </div>
 
@@ -714,19 +1254,55 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
               <div className="border rounded-lg p-4">
                 <div className="font-semibold mb-4">Follow-up & Summary</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <FormInput
-                    name="next_follow_up"
-                    label="Next Follow-up Date"
+                  <div className="space-y-2">
+                    <Label htmlFor="next_follow_up">Next Follow-up Date</Label>
+                    <Input
+                      id="next_follow_up"
                     type="date"
+                      value={formData.next_follow_up || ''}
+                      onChange={(e) => handleFieldChange('next_follow_up', e.target.value)}
+                      onBlur={() => handleFieldBlur('next_follow_up')}
                   />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Priority</Label>
+                    <Select 
+                      value={formData.priority || 'Medium'} 
+                      onValueChange={(value) => handleFieldChange('priority', value)}
+                    >
+                      <SelectTrigger className={cn(
+                        errors.priority && touched.priority && "border-red-500 focus:ring-red-500"
+                      )}>
+                        <SelectValue placeholder="Select priority" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {predefinedOptions.followUpPriorities.map((priority) => (
+                          <SelectItem key={priority} value={priority}>
+                            {priority}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {errors.priority && touched.priority && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.priority}
+                      </div>
+                    )}
+                  </div>
                   <div className="space-y-2">
                     <Label>Summary Notes</Label>
+                  <div className="space-y-2">
+                    <Label htmlFor="summary_notes">Summary Notes</Label>
                     <Textarea 
+                      id="summary_notes"
                       rows={3} 
                       value={formData.summary_notes} 
                       onChange={(e) => handleFieldChange('summary_notes', e.target.value)} 
+                      onBlur={() => handleFieldBlur('summary_notes')}
                       placeholder="Key discussion points, items shown, next steps..." 
                     />
+                  </div>
                     <div className="text-xs text-gray-500 text-right">
                       {formData.summary_notes.length}/500 characters
                     </div>
@@ -738,9 +1314,11 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
               <div className="space-y-2">
                 <Label>Internal Notes</Label>
                 <Textarea 
+                  id="notes"
                   rows={3} 
                   value={formData.notes} 
                   onChange={(e) => handleFieldChange('notes', e.target.value)} 
+                  onBlur={() => handleFieldBlur('notes')}
                   placeholder="Internal notes" 
                 />
                 <div className="text-xs text-gray-500 text-right">

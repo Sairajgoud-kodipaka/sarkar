@@ -23,28 +23,8 @@ class NotificationSound {
         return;
       }
 
-      // Create a simple notification sound using Web Audio API
-      const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-
-      // Create a simple "ding" sound
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
-
-      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(this.volume, audioContext.currentTime + 0.01);
-      gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.3);
-
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.3);
-
-      // Store the audio context for reuse
-      this.audio = new HTMLAudioElement();
+      // Lazy placeholder to keep class initialized in browser; sound is created on play()
+      this.audio = new Audio();
     } catch (error) {
       console.warn('Could not initialize notification sound:', error);
     }
@@ -57,25 +37,35 @@ class NotificationSound {
     if (!this.isEnabled || !this.audio || typeof window === 'undefined') return;
 
     try {
-      // Create a simple notification sound
+      if (!document.hasFocus()) {
+        // Silent if not active session
+        return;
+      }
+
+      // Create a refined two-note chime using Web Audio API (Apple-like)
       const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-      const oscillator = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
+      const masterGain = audioContext.createGain();
+      masterGain.gain.value = this.volume;
+      masterGain.connect(audioContext.destination);
 
-      oscillator.connect(gainNode);
-      gainNode.connect(audioContext.destination);
+      const playTone = (freq: number, start: number, duration: number) => {
+        const osc = audioContext.createOscillator();
+        const gain = audioContext.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(freq, audioContext.currentTime + start);
+        // Gentle ADSR
+        gain.gain.setValueAtTime(0.0001, audioContext.currentTime + start);
+        gain.gain.exponentialRampToValueAtTime(1.0, audioContext.currentTime + start + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioContext.currentTime + start + duration);
+        osc.connect(gain);
+        gain.connect(masterGain);
+        osc.start(audioContext.currentTime + start);
+        osc.stop(audioContext.currentTime + start + duration + 0.02);
+      };
 
-      // Create a pleasant notification sound
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime);
-      oscillator.frequency.setValueAtTime(600, audioContext.currentTime + 0.1);
-      oscillator.frequency.setValueAtTime(800, audioContext.currentTime + 0.2);
-
-      gainNode.gain.setValueAtTime(0, audioContext.currentTime);
-      gainNode.gain.linearRampToValueAtTime(this.volume, audioContext.currentTime + 0.01);
-      gainNode.gain.linearRampToValueAtTime(0, audioContext.currentTime + 0.3);
-
-      oscillator.start(audioContext.currentTime);
-      oscillator.stop(audioContext.currentTime + 0.3);
+      // Two chime notes
+      playTone(880, 0.0, 0.18);  // A5
+      playTone(1174.66, 0.18, 0.22); // D6 (approx)
     } catch (error) {
       console.warn('Could not play notification sound:', error);
     }
