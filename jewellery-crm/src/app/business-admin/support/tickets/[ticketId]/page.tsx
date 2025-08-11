@@ -38,6 +38,7 @@ interface SupportTicket {
   status: string;
   created_by: number;
   assigned_to?: number;
+  
   tenant: number;
   created_at: string;
   updated_at: string;
@@ -417,7 +418,7 @@ export default function TicketDetailPage() {
                       </span>
                     </div>
                                             <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                          {message.message || message.content}
+                          {message.content}
                         </div>
                   </div>
                 ))
