@@ -8,7 +8,7 @@
  * - Responsive design that adapts to mobile and desktop
  * - Fixed sidebar navigation
  * - Role-based content rendering
- * - Mobile-friendly bottom navigation
+ * - Improved mobile sidebar experience
  */
 
 'use client';
@@ -18,7 +18,6 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
-import { MobileNav } from './MobileNav';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { FloorProvider } from '@/contexts/FloorContext';
 
@@ -40,6 +39,9 @@ export function AppLayout({ children, className }: AppLayoutProps) {
   const pathname = usePathname();
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  // Debug logging
+  console.log('AppLayout - isMobile:', isMobile, 'sidebarOpen:', sidebarOpen);
 
   // Close sidebar when route changes on mobile
   useEffect(() => {
@@ -70,6 +72,11 @@ export function AppLayout({ children, className }: AppLayoutProps) {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isMobile, sidebarOpen]);
 
+  const handleSidebarToggle = () => {
+    console.log('Sidebar toggle clicked - current state:', sidebarOpen);
+    setSidebarOpen(!sidebarOpen);
+  };
+
   return (
     <FloorProvider>
       <div className={cn('min-h-screen bg-background', className)}>
@@ -78,6 +85,7 @@ export function AppLayout({ children, className }: AppLayoutProps) {
           <div 
             className="fixed inset-0 bg-black/50 z-40 lg:hidden"
             onClick={() => setSidebarOpen(false)}
+            style={{ backdropFilter: 'none' }}
           />
         )}
 
@@ -98,24 +106,19 @@ export function AppLayout({ children, className }: AppLayoutProps) {
         )}>
           {/* Header */}
           <Header 
-            onSidebarToggle={() => setSidebarOpen(!sidebarOpen)}
+            onSidebarToggle={handleSidebarToggle}
             showSidebarToggle={isMobile}
           />
 
           {/* Main Content */}
           <main className={cn(
-            'p-6 pb-20 lg:pb-6', // Extra bottom padding for mobile nav
+            'p-4 sm:p-6', // Reduced padding for mobile, no extra bottom padding
             'min-h-[calc(100vh-4rem)]', // Subtract header height
             'overflow-y-auto' // Make content scrollable
           )}>
             {children}
           </main>
         </div>
-
-        {/* Mobile Bottom Navigation */}
-        {isMobile && (
-          <MobileNav className="fixed bottom-0 left-0 right-0 z-30" />
-        )}
       </div>
     </FloorProvider>
   );

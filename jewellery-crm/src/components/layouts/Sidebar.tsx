@@ -32,6 +32,7 @@ import {
   TrendingUp,
   Calendar,
   ShoppingBag,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -45,6 +46,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
+import { useMediaQuery } from '@/hooks/useMediaQuery';
 
 interface SidebarProps {
   isOpen?: boolean;
@@ -204,6 +206,10 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const router = useRouter();
+  const isMobile = useMediaQuery('(max-width: 1023px)');
+
+  // Debug logging
+  console.log('Sidebar - isMobile:', isMobile, 'isOpen:', isOpen, 'onClose:', !!onClose);
 
   // Avoid noisy console logs in production that can slow down the app
 
@@ -227,16 +233,20 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
     const isActive = isActiveRoute(item.href);
 
     const itemClasses = cn(
-      'flex items-center w-full px-3 py-3 text-sm font-medium rounded-lg transition-all duration-200 sidebar-item-hover',
+      'flex items-center w-full px-3 py-4 text-sm font-medium rounded-lg transition-all duration-200 sidebar-item-hover',
       'hover:bg-sidebar-accent',
       isActive && 'bg-primary text-primary-foreground shadow-sm',
-      !isActive && 'text-sidebar-foreground'
+      !isActive && 'text-sidebar-foreground',
+      isMobile && 'py-4 text-base' // Larger touch targets on mobile
     );
 
     return (
       <Link href={item.href} onClick={onClose} className="group">
         <div className={itemClasses}>
-          <item.icon className="mr-3 h-5 w-5 flex-shrink-0" />
+          <item.icon className={cn(
+            "mr-3 flex-shrink-0",
+            isMobile ? "h-6 w-6" : "h-5 w-5" // Larger icons on mobile
+          )} />
           <span className="truncate group-hover:text-white">{item.title}</span>
         </div>
       </Link>
@@ -257,25 +267,40 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
     }
   };
 
+  // Don't render sidebar on mobile if it's not open
+  if (isMobile && !isOpen) {
+    console.log('Sidebar - Mobile and not open, returning null');
+    return null;
+  }
+
   return (
     <div
       id="app-sidebar"
       data-open={isOpen}
       className={cn(
-        'w-60 bg-sidebar text-sidebar-foreground h-screen overflow-y-auto flex flex-col',
+        'bg-sidebar text-sidebar-foreground h-screen overflow-y-auto flex flex-col',
         'fixed left-0 top-0 z-30', // Ensure proper positioning and z-index
         !isOpen && 'transform -translate-x-full lg:translate-x-0',
+        isMobile ? 'w-full max-w-sm' : 'w-60', // Full width on mobile, fixed width on desktop
+        'border-r border-sidebar-border', // Add right border for better definition
+        isMobile && isOpen && 'z-50', // Higher z-index on mobile when open
         className
       )}
     >
       {/* Logo and Business Name */}
-      <div className="flex items-center px-4 py-6 border-b border-sidebar-border">
+      <div className={cn(
+        "flex items-center justify-between px-4 py-6 border-b border-sidebar-border",
+        isMobile && "px-6 py-8" // More padding on mobile
+      )}>
         <div className="flex items-center space-x-3">
           <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
             <Gem className="h-6 w-6 text-primary-foreground" />
           </div>
           <div className="flex flex-col">
-            <span className="text-lg font-semibold text-white">
+            <span className={cn(
+              "font-semibold text-white",
+              isMobile ? "text-xl" : "text-lg" // Larger text on mobile
+            )}>
               CRM Dashboard
             </span>
             <span className="text-xs text-white/80">
@@ -283,10 +308,25 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
             </span>
           </div>
         </div>
+        
+        {/* Close button for mobile */}
+        {isMobile && onClose && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClose}
+            className="text-white hover:bg-sidebar-accent p-2 rounded-lg"
+          >
+            <X className="h-5 w-5" />
+          </Button>
+        )}
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-4 py-4 space-y-1">
+      <nav className={cn(
+        "flex-1 px-4 py-4 space-y-2",
+        isMobile && "px-6 py-6 space-y-3" // More spacing on mobile
+      )}>
         {navigationItems.map((item) => (
           <div key={item.href} className="sidebar-nav-item">
             <NavItemComponent item={item} />
@@ -295,12 +335,18 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
       </nav>
 
       {/* User Profile Section */}
-      <div className="p-4 border-t border-sidebar-border bg-sidebar/50">
+      <div className={cn(
+        "p-4 border-t border-sidebar-border bg-sidebar/50",
+        isMobile && "p-6" // More padding on mobile
+      )}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-start px-3 py-3 h-auto text-white hover:bg-sidebar-accent rounded-lg transition-colors duration-200"
+              className={cn(
+                "w-full justify-start px-3 py-3 h-auto text-white hover:bg-sidebar-accent rounded-lg transition-colors duration-200",
+                isMobile && "py-4 px-4" // Larger touch target on mobile
+              )}
             >
               <Avatar className="w-8 h-8 mr-3">
                 <AvatarImage src={undefined} />
@@ -309,7 +355,10 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
                 </AvatarFallback>
               </Avatar>
               <div className="flex flex-col items-start text-left">
-                <span className="text-sm font-medium truncate max-w-[120px] text-white">
+                <span className={cn(
+                  "font-medium truncate max-w-[120px] text-white",
+                  isMobile ? "text-base" : "text-sm" // Larger text on mobile
+                )}>
                   {user.email || 'User'}
                 </span>
                 <span className="text-xs text-white/80 capitalize">

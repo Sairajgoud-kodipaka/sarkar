@@ -108,19 +108,19 @@ export function Header({
       <div className="flex h-16 items-center justify-between px-6">
         {/* Left Section */}
         <div className="flex items-center space-x-4">
-                     {/* Mobile Sidebar Toggle */}
-           {showSidebarToggle && (
-             <Button
-               id="sidebar-toggle"
-               variant="ghost"
-               size="icon"
-               onClick={handleSidebarToggle}
-                               className="lg:hidden"
-             >
-               <Menu className="h-5 w-5" />
-               <span className="sr-only">Toggle sidebar</span>
-             </Button>
-           )}
+          {/* Mobile Sidebar Toggle */}
+          {showSidebarToggle && (
+            <Button
+              id="sidebar-toggle"
+              variant="ghost"
+              size="icon"
+              onClick={handleSidebarToggle}
+              className="lg:hidden p-2 hover:bg-accent rounded-lg transition-colors duration-200"
+            >
+              <Menu className="h-6 w-6 text-foreground" />
+              <span className="sr-only">Toggle sidebar</span>
+            </Button>
+          )}
 
           {/* Search Bar */}
           <form onSubmit={handleSearch} className="relative">
