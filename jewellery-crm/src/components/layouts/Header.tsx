@@ -105,9 +105,9 @@ export function Header({
       'relative', // Ensure proper positioning context
       className
     )}>
-      <div className="flex h-16 items-center justify-between px-6">
+      <div className="flex h-16 items-center justify-between px-4 sm:px-6">
         {/* Left Section */}
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-3 sm:space-x-4">
           {/* Mobile Sidebar Toggle */}
           {showSidebarToggle && (
             <Button
@@ -115,15 +115,25 @@ export function Header({
               variant="ghost"
               size="icon"
               onClick={handleSidebarToggle}
-              className="lg:hidden p-2 hover:bg-accent rounded-lg transition-colors duration-200"
+              className="lg:hidden p-2 hover:bg-accent rounded-lg transition-colors duration-200 touch-manipulation"
+              aria-label="Toggle sidebar navigation"
+              aria-expanded={false}
+              aria-controls="app-sidebar"
             >
-              <Menu className="h-6 w-6 text-foreground" />
+              <Menu className="h-5 w-5 text-foreground" />
               <span className="sr-only">Toggle sidebar</span>
             </Button>
           )}
 
+          {/* Mobile Debug Info */}
+          {showSidebarToggle && (
+            <div className="lg:hidden text-xs text-muted-foreground font-mono">
+              Mobile: {typeof window !== 'undefined' ? window.innerWidth : 'N/A'}px
+            </div>
+          )}
+
           {/* Search Bar */}
-          <form onSubmit={handleSearch} className="relative">
+          <form onSubmit={handleSearch} className="relative hidden lg:block">
             <div className={cn(
               'relative flex items-center',
               'w-64 lg:w-80 xl:w-96',
@@ -140,8 +150,10 @@ export function Header({
                 className={cn(
                   'pl-10 pr-4 py-2 w-full',
                   'focus:ring-2 focus:ring-primary/20 focus:border-primary',
-                  'transition-all duration-200'
+                  'transition-all duration-200',
+                  'touch-manipulation' // Optimize for touch
                 )}
+                aria-label="Search"
               />
             </div>
 
@@ -170,14 +182,18 @@ export function Header({
         </div>
 
         {/* Right Section */}
-        <div className="flex items-center space-x-2">
+        <div className="flex items-center space-x-1 sm:space-x-2">
           {/* Notifications */}
           <NotificationBell />
 
           {/* Theme Toggle */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button 
+                variant="outline" 
+                size="icon"
+                className="h-9 w-9 p-2 touch-manipulation"
+              >
                 <Sun className="h-4 w-4 rotate-0 scale-100 transition-all dark:-rotate-90 dark:scale-0" />
                 <Moon className="absolute h-4 w-4 rotate-90 scale-0 transition-all dark:rotate-0 dark:scale-100" />
                 <span className="sr-only">Toggle theme</span>
@@ -202,7 +218,11 @@ export function Header({
           {/* Help Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="icon">
+              <Button 
+                variant="outline" 
+                size="icon"
+                className="h-9 w-9 p-2 touch-manipulation"
+              >
                 <HelpCircle className="h-4 w-4" />
                 <span className="sr-only">Help</span>
               </Button>
@@ -227,10 +247,13 @@ export function Header({
           {/* User Menu */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                <Avatar className="h-8 w-8">
+              <Button 
+                variant="ghost" 
+                className="relative h-9 w-9 rounded-full p-0 touch-manipulation"
+              >
+                <Avatar className="h-9 w-9">
                   <AvatarImage src={undefined} />
-                  <AvatarFallback className="bg-primary text-primary-foreground">
+                  <AvatarFallback className="bg-primary text-primary-foreground text-sm">
                     {(() => {
                       const fn = (user as any)?.first_name || (user as any)?.firstName || '';
                       const ln = (user as any)?.last_name || (user as any)?.lastName || '';

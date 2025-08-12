@@ -438,29 +438,33 @@ export default function SettingsPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8">
-      <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-semibold text-text-primary">Business Settings</h1>
-        <Button className="flex items-center gap-2" onClick={async () => {
-          try {
-            setSavingGeneral(true);
-            const resp = await apiService.upsertBusinessSettings({
-              name: businessInfo.name,
-              email: businessInfo.email,
-              phone: businessInfo.phone,
-              address: businessInfo.address,
-              website: businessInfo.website,
-              description: businessInfo.description,
-            });
-            if (resp.success) {
-              toast.success('Business settings saved');
+    <div className="flex flex-col gap-6 p-4 sm:p-6 max-w-full overflow-x-hidden">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h1 className="text-xl sm:text-2xl font-semibold text-text-primary">Business Settings</h1>
+        <Button 
+          className="flex items-center gap-2 w-full sm:w-auto" 
+          onClick={async () => {
+            try {
+              setSavingGeneral(true);
+              const resp = await apiService.upsertBusinessSettings({
+                name: businessInfo.name,
+                email: businessInfo.email,
+                phone: businessInfo.phone,
+                address: businessInfo.address,
+                website: businessInfo.website,
+                description: businessInfo.description,
+              });
+              if (resp.success) {
+                toast.success('Business settings saved');
+              }
+            } catch (e) {
+              toast.error('Failed to save business settings');
+            } finally {
+              setSavingGeneral(false);
             }
-          } catch (e) {
-            toast.error('Failed to save business settings');
-          } finally {
-            setSavingGeneral(false);
-          }
-        }} disabled={savingGeneral}>
+          }} 
+          disabled={savingGeneral}
+        >
           <Save className="h-4 w-4" />
           {savingGeneral ? 'Saving...' : 'Save Changes'}
         </Button>
@@ -468,149 +472,159 @@ export default function SettingsPage() {
 
       {/* Main Content Tabs */}
       <Tabs defaultValue="general" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="general">General</TabsTrigger>
-          <TabsTrigger value="team">Team</TabsTrigger>
-          <TabsTrigger value="stores">Stores</TabsTrigger>
-          <TabsTrigger value="integrations">Integrations</TabsTrigger>
-          <TabsTrigger value="notifications">Notifications</TabsTrigger>
-          <TabsTrigger value="security">Security</TabsTrigger>
-        </TabsList>
+        <div className="overflow-x-auto">
+          <TabsList className="w-full min-w-max grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 p-1 bg-muted/50">
+            <TabsTrigger value="general" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">General</TabsTrigger>
+            <TabsTrigger value="team" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Team</TabsTrigger>
+            <TabsTrigger value="stores" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Stores</TabsTrigger>
+            <TabsTrigger value="integrations" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Integrations</TabsTrigger>
+            <TabsTrigger value="notifications" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Notifications</TabsTrigger>
+            <TabsTrigger value="security" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Security</TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="general" className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <Card>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+            <Card className="w-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Building2 className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Building2 className="h-4 w-4 sm:h-5 sm:w-5" />
                   Business Information
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="business-name">Business Name</Label>
+                  <Label htmlFor="business-name" className="text-sm">Business Name</Label>
                   <Input
                     id="business-name"
                     value={businessInfo.name}
                     onChange={(e) => setBusinessInfo({...businessInfo, name: e.target.value})}
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="business-email">Email Address</Label>
+                  <Label htmlFor="business-email" className="text-sm">Email Address</Label>
                   <Input
                     id="business-email"
                     type="email"
                     value={businessInfo.email}
                     onChange={(e) => setBusinessInfo({...businessInfo, email: e.target.value})}
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="business-phone">Phone Number</Label>
+                  <Label htmlFor="business-phone" className="text-sm">Phone Number</Label>
                   <Input
                     id="business-phone"
                     value={businessInfo.phone}
                     onChange={(e) => setBusinessInfo({...businessInfo, phone: e.target.value})}
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="business-address">Address</Label>
+                  <Label htmlFor="business-address" className="text-sm">Address</Label>
                   <Textarea
                     id="business-address"
                     value={businessInfo.address}
                     onChange={(e) => setBusinessInfo({...businessInfo, address: e.target.value})}
+                    className="w-full min-h-[80px]"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="business-website">Website</Label>
+                  <Label htmlFor="business-website" className="text-sm">Website</Label>
                   <Input
                     id="business-website"
                     value={businessInfo.website}
                     onChange={(e) => setBusinessInfo({...businessInfo, website: e.target.value})}
+                    className="w-full"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="business-description">Description</Label>
+                  <Label htmlFor="business-description" className="text-sm">Description</Label>
                   <Textarea
                     id="business-description"
                     value={businessInfo.description}
                     onChange={(e) => setBusinessInfo({...businessInfo, description: e.target.value})}
+                    className="w-full min-h-[80px]"
                   />
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="w-full">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Calendar className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <Calendar className="h-4 w-4 sm:h-5 sm:w-5" />
                   Business Hours
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label>Monday - Friday</Label>
-                    <div className="flex gap-2">
-                      <Input placeholder="9:00 AM" />
-                      <span className="flex items-center">to</span>
-                      <Input placeholder="6:00 PM" />
+                    <Label className="text-sm">Monday - Friday</Label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input placeholder="9:00 AM" className="w-full" />
+                      <span className="flex items-center justify-center text-sm text-muted-foreground">to</span>
+                      <Input placeholder="6:00 PM" className="w-full" />
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <Label>Saturday</Label>
-                    <div className="flex gap-2">
-                      <Input placeholder="10:00 AM" />
-                      <span className="flex items-center">to</span>
-                      <Input placeholder="5:00 PM" />
+                    <Label className="text-sm">Saturday</Label>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Input placeholder="10:00 AM" className="w-full" />
+                      <span className="flex items-center justify-center text-sm text-muted-foreground">to</span>
+                      <Input placeholder="5:00 PM" className="w-full" />
                     </div>
                   </div>
-                  <div className="space-y-2">
-                    <Label>Sunday</Label>
+                  <div className="space-y-2 sm:col-span-2">
+                    <Label className="text-sm">Sunday</Label>
                     <div className="flex gap-2">
-                      <Input placeholder="Closed" disabled />
+                      <Input placeholder="Closed" disabled className="w-full" />
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className="w-full lg:col-span-2">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CreditCard className="h-5 w-5" />
+                <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+                  <CreditCard className="h-4 w-4 sm:h-5 sm:w-5" />
                   Payment Settings
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <Label>Currency</Label>
-                  <Select value="inr" disabled>
-                    <SelectTrigger>
-                      <SelectValue placeholder="INR (₹)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="inr">INR (₹)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Tax Rate (%)</Label>
-                  <Input type="number" placeholder="8.5" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Payment Methods</Label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <div className="flex items-center space-x-2">
+                    <Label className="text-sm">Currency</Label>
+                    <Select value="inr" disabled>
+                      <SelectTrigger className="w-full">
+                        <SelectValue placeholder="INR (₹)" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="inr">INR (₹)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label className="text-sm">Tax Rate (%)</Label>
+                    <Input type="number" placeholder="8.5" className="w-full" />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label className="text-sm">Payment Methods</Label>
+                  <div className="space-y-3">
+                    <div className="flex items-center space-x-3">
                       <Switch id="credit-card" defaultChecked />
-                      <Label htmlFor="credit-card">Credit Card</Label>
+                      <Label htmlFor="credit-card" className="text-sm">Credit Card</Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-3">
                       <Switch id="cash" defaultChecked />
-                      <Label htmlFor="cash">Cash</Label>
+                      <Label htmlFor="cash" className="text-sm">Cash</Label>
                     </div>
-                    <div className="flex items-center space-x-2">
+                    <div className="flex items-center space-x-3">
                       <Switch id="bank-transfer" />
-                      <Label htmlFor="bank-transfer">Bank Transfer</Label>
+                      <Label htmlFor="bank-transfer" className="text-sm">Bank Transfer</Label>
                     </div>
                   </div>
                 </div>

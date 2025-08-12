@@ -8,13 +8,14 @@
  * - Dark navy background matching HubSpot design
  * - Role-based menu items
  * - Active state highlighting with orange accent
- * - Responsive behavior for mobile devices
+ * - Professional responsive behavior for mobile devices
  * - Smooth animations and interactions
+ * - Touch gesture support and accessibility
  */
 
 'use client';
 
-import React from 'react';
+import React, { forwardRef, useCallback, useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
@@ -46,12 +47,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useAuth } from '@/hooks/useAuth';
 import { useRouter } from 'next/navigation';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
+import { useIsMobileOrTablet, useIsTouchDevice } from '@/hooks/useMediaQuery';
 
 interface SidebarProps {
   isOpen?: boolean;
   onClose?: () => void;
   className?: string;
+  style?: React.CSSProperties;
 }
 
 interface NavItem {
@@ -202,16 +204,20 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
   ];
 };
 
-export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
+export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({ 
+  isOpen = true, 
+  onClose, 
+  className,
+  style 
+}, ref) => {
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const router = useRouter();
-  const isMobile = useMediaQuery('(max-width: 1023px)');
+  const isMobileOrTablet = useIsMobileOrTablet();
+  const isTouchDevice = useIsTouchDevice();
 
   // Debug logging
-  console.log('Sidebar - isMobile:', isMobile, 'isOpen:', isOpen, 'onClose:', !!onClose);
-
-  // Avoid noisy console logs in production that can slow down the app
+  console.log('Sidebar - isMobileOrTablet:', isMobileOrTablet, 'isOpen:', isOpen, 'onClose:', !!onClose);
 
   // If no user, don't render sidebar
   if (!user) {
@@ -221,40 +227,101 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
 
   // Get user role from metadata
   const userRole = user?.user_metadata?.role || 'user';
-  const navigationItems = getNavigationItems(userRole);
+  const navigationItems = useMemo(() => getNavigationItems(userRole), [userRole]);
 
   // Check if the current route matches a nav item
-  const isActiveRoute = (href: string): boolean => {
+  const isActiveRoute = useCallback((href: string): boolean => {
     return pathname.startsWith(href);
-  };
+  }, [pathname]);
+
+  // Handle navigation item click
+  const handleNavItemClick = useCallback((e: React.MouseEvent | React.TouchEvent, item: NavItem) => {
+    console.log('NavItem clicked:', {
+      type: e.type,
+      title: item.title,
+      href: item.href,
+      onMobile: isMobileOrTablet,
+      isTouchDevice: isTouchDevice,
+      currentPath: pathname
+    });
+    
+    // Prevent default behavior
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isMobileOrTablet && onClose) {
+      console.log('Closing sidebar on mobile navigation');
+      onClose();
+    }
+    
+    // Navigate to the route
+    console.log('Navigating to:', item.href);
+    router.push(item.href);
+  }, [isMobileOrTablet, isTouchDevice, onClose, router, pathname]);
 
   // Navigation Item Component
-  const NavItemComponent = ({ item }: { item: NavItem }) => {
+  const NavItemComponent = useCallback(({ item }: { item: NavItem }) => {
     const isActive = isActiveRoute(item.href);
 
-    const itemClasses = cn(
+    const itemClasses = useMemo(() => cn(
       'flex items-center w-full px-3 py-4 text-sm font-medium rounded-lg transition-all duration-200 sidebar-item-hover',
-      'hover:bg-sidebar-accent',
+      'hover:bg-sidebar-accent focus:bg-sidebar-accent focus:outline-none focus:ring-2 focus:ring-sidebar-primary focus:ring-offset-2 focus:ring-offset-sidebar',
       isActive && 'bg-primary text-primary-foreground shadow-sm',
       !isActive && 'text-sidebar-foreground',
-      isMobile && 'py-4 text-base' // Larger touch targets on mobile
-    );
+      isMobileOrTablet && 'py-4 text-base touch-manipulation', // Larger touch targets and touch optimization on mobile
+      isTouchDevice && 'touch-manipulation cursor-pointer' // Ensure touch works on mobile
+    ), [isActive, isMobileOrTablet, isTouchDevice]);
+
+    const handleTouchStart = useCallback((e: React.TouchEvent) => {
+      console.log('Touch start on nav item:', item.title);
+      (e.currentTarget as HTMLElement).style.transform = 'scale(0.98)';
+    }, [item.title]);
+
+    const handleTouchEnd = useCallback((e: React.TouchEvent) => {
+      console.log('Touch end on nav item:', item.title);
+      (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
+    }, [item.title]);
+
+    const handleClick = useCallback((e: React.MouseEvent) => {
+      handleNavItemClick(e, item);
+    }, [handleNavItemClick, item]);
 
     return (
-      <Link href={item.href} onClick={onClose} className="group">
-        <div className={itemClasses}>
+      <div 
+        className="group block w-full touch-manipulation"
+        style={{ 
+          WebkitTapHighlightColor: 'transparent',
+          touchAction: 'manipulation'
+        }}
+      >
+        <div 
+          className={itemClasses}
+          onClick={handleClick}
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+              e.preventDefault();
+              handleNavItemClick(e as any, item);
+            }
+          }}
+          aria-label={`Navigate to ${item.title}`}
+          aria-current={isActive ? 'page' : undefined}
+        >
           <item.icon className={cn(
             "mr-3 flex-shrink-0",
-            isMobile ? "h-6 w-6" : "h-5 w-5" // Larger icons on mobile
+            isMobileOrTablet ? "h-6 w-6" : "h-5 w-5" // Larger icons on mobile
           )} />
           <span className="truncate group-hover:text-white">{item.title}</span>
         </div>
-      </Link>
+      </div>
     );
-  };
+  }, [isActiveRoute, handleNavItemClick, isMobileOrTablet, isTouchDevice]);
 
   // Get role display name
-  const getRoleDisplayName = (role: string) => {
+  const getRoleDisplayName = useCallback((role: string) => {
     switch (role) {
       case 'business_admin':
         return 'BUSINESS ADMIN';
@@ -265,32 +332,32 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
       default:
         return 'USER';
     }
-  };
+  }, []);
 
-  // Don't render sidebar on mobile if it's not open
-  if (isMobile && !isOpen) {
-    console.log('Sidebar - Mobile and not open, returning null');
-    return null;
-  }
+  // Always render the sidebar, let CSS handle the visibility
+  console.log('Sidebar - Rendering sidebar with props:', { isMobileOrTablet, isOpen, hasUser: !!user });
 
   return (
     <div
+      ref={ref}
       id="app-sidebar"
       data-open={isOpen}
       className={cn(
         'bg-sidebar text-sidebar-foreground h-screen overflow-y-auto flex flex-col',
         'fixed left-0 top-0 z-30', // Ensure proper positioning and z-index
-        !isOpen && 'transform -translate-x-full lg:translate-x-0',
-        isMobile ? 'w-full max-w-sm' : 'w-60', // Full width on mobile, fixed width on desktop
+        isMobileOrTablet ? 'w-full max-w-sm' : 'w-60', // Full width on mobile, fixed width on desktop
         'border-r border-sidebar-border', // Add right border for better definition
-        isMobile && isOpen && 'z-50', // Higher z-index on mobile when open
+        isMobileOrTablet && isOpen && 'z-50', // Higher z-index on mobile when open
         className
       )}
+      style={style}
+      role="navigation"
+      aria-label="Main navigation"
     >
       {/* Logo and Business Name */}
       <div className={cn(
         "flex items-center justify-between px-4 py-6 border-b border-sidebar-border",
-        isMobile && "px-6 py-8" // More padding on mobile
+        isMobileOrTablet && "px-6 py-8" // More padding on mobile
       )}>
         <div className="flex items-center space-x-3">
           <div className="flex items-center justify-center w-10 h-10 bg-primary rounded-lg">
@@ -299,7 +366,7 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
           <div className="flex flex-col">
             <span className={cn(
               "font-semibold text-white",
-              isMobile ? "text-xl" : "text-lg" // Larger text on mobile
+              isMobileOrTablet ? "text-xl" : "text-lg" // Larger text on mobile
             )}>
               CRM Dashboard
             </span>
@@ -310,12 +377,13 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
         </div>
         
         {/* Close button for mobile */}
-        {isMobile && onClose && (
+        {isMobileOrTablet && onClose && (
           <Button
             variant="ghost"
             size="sm"
             onClick={onClose}
-            className="text-white hover:bg-sidebar-accent p-2 rounded-lg"
+            className="text-white hover:bg-sidebar-accent p-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-sidebar-primary focus:ring-offset-2 focus:ring-offset-sidebar"
+            aria-label="Close sidebar"
           >
             <X className="h-5 w-5" />
           </Button>
@@ -325,7 +393,7 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
       {/* Navigation */}
       <nav className={cn(
         "flex-1 px-4 py-4 space-y-2",
-        isMobile && "px-6 py-6 space-y-3" // More spacing on mobile
+        isMobileOrTablet && "px-6 py-6 space-y-3" // More spacing on mobile
       )}>
         {navigationItems.map((item) => (
           <div key={item.href} className="sidebar-nav-item">
@@ -337,16 +405,28 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
       {/* User Profile Section */}
       <div className={cn(
         "p-4 border-t border-sidebar-border bg-sidebar/50",
-        isMobile && "p-6" // More padding on mobile
+        isMobileOrTablet && "p-6" // More padding on mobile
       )}>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
               className={cn(
-                "w-full justify-start px-3 py-3 h-auto text-white hover:bg-sidebar-accent rounded-lg transition-colors duration-200",
-                isMobile && "py-4 px-4" // Larger touch target on mobile
+                "w-full justify-start px-3 py-3 h-auto text-white hover:bg-sidebar-accent rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-sidebar-primary focus:ring-offset-2 focus:ring-offset-sidebar",
+                isMobileOrTablet && "py-4 px-4 touch-manipulation" // Larger touch target and touch optimization on mobile
               )}
+              style={{ 
+                WebkitTapHighlightColor: 'transparent',
+                touchAction: 'manipulation'
+              }}
+              onTouchStart={(e) => {
+                console.log('Touch start on user profile button');
+                e.currentTarget.style.transform = 'scale(0.98)';
+              }}
+              onTouchEnd={(e) => {
+                console.log('Touch end on user profile button');
+                e.currentTarget.style.transform = 'scale(1)';
+              }}
             >
               <Avatar className="w-8 h-8 mr-3">
                 <AvatarImage src={undefined} />
@@ -357,7 +437,7 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
               <div className="flex flex-col items-start text-left">
                 <span className={cn(
                   "font-medium truncate max-w-[120px] text-white",
-                  isMobile ? "text-base" : "text-sm" // Larger text on mobile
+                  isMobileOrTablet ? "text-base" : "text-sm" // Larger text on mobile
                 )}>
                   {user.email || 'User'}
                 </span>
@@ -373,26 +453,36 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
           <DropdownMenuContent 
             align="end" 
             className="w-56 bg-card border-border shadow-xl"
+            style={{ 
+              zIndex: 9999,
+              touchAction: 'manipulation'
+            }}
           >
             <DropdownMenuLabel>My Account</DropdownMenuLabel>
             <DropdownMenuSeparator />
             
-            <DropdownMenuItem>
+            <DropdownMenuItem className="touch-manipulation">
               <User className="mr-2 h-4 w-4" />
               Profile Settings
             </DropdownMenuItem>
             
-            <DropdownMenuItem>
+            <DropdownMenuItem className="touch-manipulation">
               <Settings className="mr-2 h-4 w-4" />
               Preferences
             </DropdownMenuItem>
             
             <DropdownMenuSeparator />
             
-            <DropdownMenuItem className="text-destructive" onClick={async () => {
-              await logout();
-              router.push('/login');
-            }}>
+            <DropdownMenuItem 
+              className="text-destructive touch-manipulation" 
+              onClick={async (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('Logout clicked');
+                await logout();
+                router.push('/login');
+              }}
+            >
               <LogOut className="mr-2 h-4 w-4" />
               Sign Out
             </DropdownMenuItem>
@@ -401,4 +491,6 @@ export function Sidebar({ isOpen = true, onClose, className }: SidebarProps) {
       </div>
     </div>
   );
-}
+}));
+
+Sidebar.displayName = 'Sidebar';

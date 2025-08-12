@@ -9,11 +9,12 @@
  * - Automatic cleanup of event listeners
  * - TypeScript support
  * - Performance optimized
+ * - Better mobile detection
  */
 
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 /**
  * Custom hook to track media query matches
@@ -56,8 +57,7 @@ export function useMediaQuery(query: string): boolean {
       setMatches(event.matches);
     };
 
-    // Add event listener
-    // Use both methods for broader browser support
+    // Add event listener with modern API
     if (mediaQuery.addEventListener) {
       mediaQuery.addEventListener('change', handleChange);
     } else {
@@ -82,46 +82,76 @@ export function useMediaQuery(query: string): boolean {
 
 /**
  * Predefined breakpoint hooks for common use cases
- * These match the Tailwind CSS breakpoints
+ * These follow modern mobile-first responsive design principles
  */
 
 /**
  * Hook to detect mobile screens (< 768px)
+ * Primary mobile breakpoint
  */
 export function useIsMobile(): boolean {
   return useMediaQuery('(max-width: 767px)');
 }
 
 /**
+ * Hook to detect small mobile screens (< 480px)
+ * For very small devices
+ */
+export function useIsSmallMobile(): boolean {
+  return useMediaQuery('(max-width: 479px)');
+}
+
+/**
+ * Hook to detect medium mobile screens (480px - 767px)
+ * For standard mobile devices
+ */
+export function useIsMediumMobile(): boolean {
+  return useMediaQuery('(min-width: 480px) and (max-width: 767px)');
+}
+
+/**
  * Hook to detect tablet screens (768px - 1023px)
+ * For tablet devices
  */
 export function useIsTablet(): boolean {
   return useMediaQuery('(min-width: 768px) and (max-width: 1023px)');
 }
 
 /**
- * Hook to detect desktop screens (>= 768px)
+ * Hook to detect mobile and tablet screens (< 1024px)
+ * For all handheld devices
  */
-export function useIsDesktop(): boolean {
-  return useMediaQuery('(min-width: 768px)');
+export function useIsMobileOrTablet(): boolean {
+  return useMediaQuery('(max-width: 1023px)');
 }
 
 /**
- * Hook to detect large desktop screens (>= 1024px)
+ * Hook to detect desktop screens (>= 1024px)
+ * For desktop and larger devices
  */
-export function useIsLargeDesktop(): boolean {
+export function useIsDesktop(): boolean {
   return useMediaQuery('(min-width: 1024px)');
 }
 
 /**
- * Hook to detect extra large screens (>= 1280px)
+ * Hook to detect large desktop screens (>= 1280px)
+ * For large desktop devices
  */
-export function useIsExtraLarge(): boolean {
+export function useIsLargeDesktop(): boolean {
   return useMediaQuery('(min-width: 1280px)');
 }
 
 /**
+ * Hook to detect extra large screens (>= 1536px)
+ * For very large displays
+ */
+export function useIsExtraLarge(): boolean {
+  return useMediaQuery('(min-width: 1536px)');
+}
+
+/**
  * Hook to detect if the user prefers reduced motion
+ * For accessibility compliance
  */
 export function usePrefersReducedMotion(): boolean {
   return useMediaQuery('(prefers-reduced-motion: reduce)');
@@ -129,6 +159,7 @@ export function usePrefersReducedMotion(): boolean {
 
 /**
  * Hook to detect if the user prefers dark mode
+ * For theme switching
  */
 export function usePrefersDarkMode(): boolean {
   return useMediaQuery('(prefers-color-scheme: dark)');
@@ -136,6 +167,7 @@ export function usePrefersDarkMode(): boolean {
 
 /**
  * Hook to detect touch devices
+ * For touch-specific interactions
  */
 export function useIsTouchDevice(): boolean {
   return useMediaQuery('(hover: none) and (pointer: coarse)');
@@ -143,26 +175,47 @@ export function useIsTouchDevice(): boolean {
 
 /**
  * Hook to detect high resolution displays
+ * For retina and high-DPI screens
  */
 export function useIsHighResolution(): boolean {
   return useMediaQuery('(min-resolution: 2dppx)');
 }
 
 /**
+ * Hook to detect landscape orientation
+ * For orientation-specific layouts
+ */
+export function useIsLandscape(): boolean {
+  return useMediaQuery('(orientation: landscape)');
+}
+
+/**
+ * Hook to detect portrait orientation
+ * For orientation-specific layouts
+ */
+export function useIsPortrait(): boolean {
+  return useMediaQuery('(orientation: portrait)');
+}
+
+/**
  * Comprehensive responsive hook that returns current breakpoint
+ * Provides detailed breakpoint information
  */
 export function useBreakpoint() {
+  const isSmallMobile = useIsSmallMobile();
+  const isMediumMobile = useIsMediumMobile();
   const isMobile = useIsMobile();
   const isTablet = useIsTablet();
   const isDesktop = useIsDesktop();
   const isLargeDesktop = useIsLargeDesktop();
   const isExtraLarge = useIsExtraLarge();
 
-  if (isExtraLarge) return 'xl';
-  if (isLargeDesktop) return 'lg';
-  if (isDesktop) return 'md';
-  if (isTablet) return 'sm';
-  if (isMobile) return 'xs';
+  if (isExtraLarge) return '2xl';
+  if (isLargeDesktop) return 'xl';
+  if (isDesktop) return 'lg';
+  if (isTablet) return 'md';
+  if (isMediumMobile) return 'sm';
+  if (isSmallMobile) return 'xs';
   
   return 'unknown';
 }
@@ -170,4 +223,4 @@ export function useBreakpoint() {
 /**
  * Type for breakpoint values
  */
-export type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'unknown';
+export type Breakpoint = 'xs' | 'sm' | 'md' | 'lg' | 'xl' | '2xl' | 'unknown';

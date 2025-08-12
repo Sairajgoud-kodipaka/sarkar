@@ -313,18 +313,7 @@ export default function ProductsPage() {
               Grid View
             </Button>
           </div>
-          <Button 
-            variant="outline" 
-            onClick={() => {
-              setShowGlobalCatalogue(!showGlobalCatalogue);
-              if (!showGlobalCatalogue && !globalCatalogue) {
-                fetchGlobalCatalogue();
-              }
-            }}
-          >
-            <Globe className="w-4 h-4 mr-2" />
-            {showGlobalCatalogue ? 'Hide' : 'Show'} Global Catalogue
-          </Button>
+          
           <Button onClick={() => setIsCategoriesModalOpen(true)}>
             <Tag className="w-4 h-4 mr-2" />
             Categories
