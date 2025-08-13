@@ -93,7 +93,6 @@ export default function FloorManagerTicketDetailPage() {
         setError('Ticket not found');
       }
     } catch (error) {
-      console.error('Failed to fetch ticket details:', error);
       setError('Failed to load ticket details');
     } finally {
       setLoading(false);
@@ -107,28 +106,28 @@ export default function FloorManagerTicketDetailPage() {
   }, [ticketId, fetchTicketDetails]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim()) return;
+    if (!newMessage.trim() || !user) return;
     
     try {
       setSendingMessage(true);
-      console.log("Attempting to send message with user ID:", user?.id);
-      const response = await apiService.createTicketMessage(ticketId, {
-        content: newMessage,
-        sender_id: user?.id,
-        is_internal: false,
-        message_type: 'text'
-      });
+      const messageData = {
+        ticket_id: ticketId,
+        message: newMessage.trim(),
+        sender_id: user.id,
+        is_internal: false
+      };
+
+      const response = await apiService.createTicketMessage(ticketId, messageData);
       
       if (response.success) {
         setNewMessage('');
         await fetchTicketDetails(); // Refresh to get new message
         toast.success('Message sent successfully!');
       } else {
-        setError(`Failed to send message: ${response.message}`);
+        setError('Failed to send message');
       }
     } catch (error) {
-      console.error('Failed to send message:', error);
-      setError(`Failed to send message: ${(error as Error).message}`);
+      setError('Failed to send message');
     } finally {
       setSendingMessage(false);
     }

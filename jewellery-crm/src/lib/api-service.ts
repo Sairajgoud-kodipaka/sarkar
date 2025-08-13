@@ -158,16 +158,32 @@ export interface FloorData {
 
 // Dashboard data interface for the admin dashboard
 export interface DashboardData {
-  visitors: {
+  // New visitors (people entering the store)
+  new_visitors: {
     today: number;
     this_week: number;
     this_month: number;
   };
+  
+  // Sales data
   sales: {
     today: number;
     this_week: number;
     this_month: number;
   };
+  
+  // Current floor occupancy (active customers right now)
+  current_floor_occupancy: {
+    floor_1: number;
+    floor_2: number;
+    floor_3: number;
+    total_active: number;
+  };
+  
+  // Total customers in the system
+  total_customers: number;
+  
+  // Floor customer details (for expandable view)
   floor_customers: Array<{
     floor: number;
     customers: Array<{
@@ -238,6 +254,46 @@ class ApiService {
   // Public method to clear specific cache key
   public clearCacheKey(key: string) {
     this.cache.delete(key);
+  }
+
+  // Authentication helper methods
+  private async ensureAuthenticated(): Promise<void> {
+    let { data: { session }, error } = await supabase.auth.getSession();
+    
+    // If no session, try to refresh
+    if (error || !session) {
+      const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+      if (refreshError || !refreshData.session) {
+        throw new Error('Authentication required. Please log in to continue.');
+      }
+      session = refreshData.session;
+    }
+    
+    // Check if session is still valid
+    if (!session || !session.access_token) {
+      throw new Error('Authentication required. Please log in to continue.');
+    }
+  }
+
+  private async getCurrentUser(): Promise<{ id: string; email: string } | null> {
+    const { data: { user }, error } = await supabase.auth.getUser();
+    if (error || !user) {
+      return null;
+    }
+    return {
+      id: user.id,
+      email: user.email || ''
+    };
+  }
+
+  // Public method to check authentication status
+  public async isAuthenticated(): Promise<boolean> {
+    try {
+      await this.ensureAuthenticated();
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   private handleSupabaseResponse<T>(response: any): ApiResponse<T> {
@@ -321,8 +377,24 @@ class ApiService {
           }))
       }));
 
+      // Get total customers count
+      const { count: totalCustomers } = await supabase
+        .from('customers')
+        .select('*', { count: 'exact', head: true });
+
+      // Get current floor occupancy (active customers right now)
+      const { data: currentFloorData } = await supabase
+        .from('visits')
+        .select('floor')
+        .eq('date', today);
+
+      const floor1Active = currentFloorData?.filter(v => v.floor === 1).length || 0;
+      const floor2Active = currentFloorData?.filter(v => v.floor === 2).length || 0;
+      const floor3Active = currentFloorData?.filter(v => v.floor === 3).length || 0;
+      const totalActive = floor1Active + floor2Active + floor3Active;
+
       const result = {
-        visitors: {
+        new_visitors: {
           today: visits_today,
           this_week: visits_this_week,
           this_month: visits_this_month,
@@ -332,6 +404,13 @@ class ApiService {
           this_week: sales_this_week,
           this_month: sales_this_month,
         },
+        current_floor_occupancy: {
+          floor_1: floor1Active,
+          floor_2: floor2Active,
+          floor_3: floor3Active,
+          total_active: totalActive,
+        },
+        total_customers: totalCustomers || 0,
         floor_customers: floorCustomers,
       };
 
@@ -342,8 +421,10 @@ class ApiService {
       console.error('Error in getDashboardData:', error);
       // Return default data on error to prevent UI hanging
       return {
-        visitors: { today: 0, this_week: 0, this_month: 0 },
+        new_visitors: { today: 0, this_week: 0, this_month: 0 },
         sales: { today: 0, this_week: 0, this_month: 0 },
+        current_floor_occupancy: { floor_1: 0, floor_2: 0, floor_3: 0, total_active: 0 },
+        total_customers: 0,
         floor_customers: [1, 2, 3].map(floor => ({ floor, customers: [] }))
       };
     }
@@ -464,44 +545,37 @@ class ApiService {
     return customersWithRealData;
   }
 
-  async getCustomers(params?: {
+  async getCustomers(params: {
     page?: number;
     search?: string;
     floor?: number;
     status?: string;
-  }): Promise<ApiResponse<Customer[]>> {
-    console.log('getCustomers called with params:', params);
-    
-    let query = supabase.from('customers').select('*');
+  } = {}): Promise<ApiResponse<Customer[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('customers')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (params?.search) {
-      query = query.or(`name.ilike.%${params.search}%,phone.ilike.%${params.search}%`);
-    }
+      if (error) {
+        throw error;
+      }
 
-    if (params?.floor) {
-      query = query.eq('floor', params.floor);
-    }
+      const response: ApiResponse<Customer[]> = {
+        data: data || [],
+        success: true,
+        message: 'Customers fetched successfully'
+      };
 
-    if (params?.status) {
-      query = query.eq('status', params.status);
+      return response;
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+      return {
+        data: [],
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch customers'
+      };
     }
-
-    console.log('Executing Supabase query...');
-    const { data, error } = await query;
-    console.log('Supabase response - data:', data, 'error:', error);
-    
-    if (error) {
-      console.error('Supabase error in getCustomers:', error);
-      throw new Error(error.message);
-    }
-    
-    // Return the data directly since we've already handled the error
-    const response: ApiResponse<Customer[]> = {
-      data: data || [],
-      success: true,
-    };
-    console.log('Final getCustomers response:', response);
-    return response;
   }
 
   async getCustomer(id: string): Promise<ApiResponse<Customer>> {
@@ -526,39 +600,44 @@ class ApiService {
     type?: string;
     status?: 'active' | 'inactive';
   }): Promise<ApiResponse<Product[]>> {
-    console.log('getProducts called with params:', params);
-    let query = supabase.from('products').select('*');
+    try {
+      let query = supabase.from('products').select('*');
 
-    if (params?.search) {
-      query = query.or(`name.ilike.%${params.search}%,sku.ilike.%${params.search}%`);
-    }
+      if (params?.search) {
+        query = query.or(`name.ilike.%${params.search}%,sku.ilike.%${params.search}%`);
+      }
 
-    if (params?.category && params.category !== 'all') {
-      query = query.eq('category', params.category);
-    }
+      if (params?.category && params.category !== 'all') {
+        query = query.eq('category', params.category);
+      }
 
-    if (params?.type && params.type !== 'all') {
-      query = query.eq('type', params.type);
-    }
+      if (params?.type && params.type !== 'all') {
+        query = query.eq('type', params.type);
+      }
 
-    if (params?.status) {
-      query = query.eq('status', params.status);
-    } else {
-      // Default to active products only
-      query = query.eq('status', 'active');
-    }
+      if (params?.status) {
+        query = query.eq('status', params.status);
+      } else {
+        // Default to active products only
+        query = query.eq('status', 'active');
+      }
 
-    const { data, error } = await query;
-    console.log('Supabase response - data:', data, 'error:', error);
-    
-    if (error) {
-      console.error('Supabase error:', error);
-      throw new Error(error.message);
+      const { data, error } = await query;
+      
+      if (error) {
+        throw error;
+      }
+      
+      const response = this.handleSupabaseResponse({ data, error }) as ApiResponse<Product[]>;
+      return response;
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      return {
+        data: [],
+        success: false,
+        message: error instanceof Error ? error.message : 'Failed to fetch products'
+      };
     }
-    
-    const response = this.handleSupabaseResponse({ data, error }) as ApiResponse<Product[]>;
-    console.log('Final response:', response);
-    return response;
   }
 
   async getProduct(id: string): Promise<ApiResponse<Product>> {
@@ -575,20 +654,26 @@ class ApiService {
 
   async createProduct(productData: Partial<Product>): Promise<ApiResponse<Product>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
       // Clean the product data for database insertion
       const cleanProductData: any = { ...productData };
       
-      // Ensure image fields are properly set
+      // FIX: Map image fields correctly to ensure images are saved
       if (cleanProductData.image) {
+        // Keep the image URL in the 'image' field
+        cleanProductData.image = cleanProductData.image;
+        // Also set it in 'image_url' field for compatibility
         cleanProductData.image_url = cleanProductData.image;
+        // Set as main image as well
+        cleanProductData.main_image_url = cleanProductData.image;
       }
       
       // Remove undefined values
       const finalData = Object.fromEntries(
         Object.entries(cleanProductData).filter(([_, value]) => value !== undefined && value !== null && value !== '')
       );
-
-      console.log('Creating product with data:', finalData);
       
       const { data, error } = await supabase
         .from('products')
@@ -601,7 +686,11 @@ class ApiService {
         throw new Error(error.message);
       }
       
-      console.log('Product created successfully:', data);
+      // Add acknowledgment for image addition
+      if (finalData.image) {
+        // Image successfully added
+      }
+      
       return this.handleSupabaseResponse(data);
     } catch (error) {
       console.error('Create product error:', error);
@@ -611,6 +700,9 @@ class ApiService {
 
   async updateProduct(id: string, productData: Partial<Product> | FormData): Promise<ApiResponse<Product>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
       let cleanProductData: any = {};
 
       // Handle FormData (from edit form) or regular object (from other forms)
@@ -655,8 +747,6 @@ class ApiService {
         Object.entries(mappedData).filter(([_, value]) => value !== undefined && value !== null && value !== '')
       );
 
-      console.log('Updating product with data:', finalData);
-
       const { data, error } = await supabase
         .from('products')
         .update(finalData)
@@ -677,14 +767,22 @@ class ApiService {
   }
 
   async deleteProduct(id: string): Promise<ApiResponse<void>> {
-    const { error } = await supabase
-      .from('products')
-      .delete()
-      .eq('id', id);
+    try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
+      const { error } = await supabase
+        .from('products')
+        .delete()
+        .eq('id', id);
 
-    if (error) throw new Error(error.message);
-    
-    return this.handleSupabaseResponse(undefined);
+      if (error) throw new Error(error.message);
+      
+      return this.handleSupabaseResponse(undefined);
+    } catch (error) {
+      console.error('Delete product error:', error);
+      throw error;
+    }
   }
 
   // Sales
@@ -959,43 +1057,178 @@ class ApiService {
     
     if (error) throw new Error(error.message);
 
-    // Transform data for export
+    // Transform data for export with all available fields
     const exportData = data?.map((c: any) => ({
-      name: c.name,
-      phone: c.phone,
-      interest: c.interest,
-      floor: c.floor,
-      status: c.status,
+      // Core fields
+      name: c.name || '',
+      phone: c.phone || '',
+      interest: c.interest || '',
+      floor: c.floor || '',
+      visited_date: c.visited_date || '',
+      status: c.status || '',
+      notes: c.notes || '',
+      assigned_to: c.assigned_to || '',
+      created_at: c.created_at || '',
+      updated_at: c.updated_at || '',
+      
+      // Extended profile fields
+      first_name: c.first_name || c.name?.split(' ')[0] || '',
+      last_name: c.last_name || c.name?.split(' ').slice(1).join(' ') || '',
+      email: c.email || '',
+      address: c.address || '',
+      city: c.city || '',
+      state: c.state || '',
+      country: c.country || '',
+      postal_code: c.postal_code || '',
+      date_of_birth: c.date_of_birth || '',
+      anniversary_date: c.anniversary_date || '',
+      community: c.community || '',
+      mother_tongue: c.mother_tongue || '',
+      reason_for_visit: c.reason_for_visit || '',
+      lead_source: c.lead_source || '',
+      age_of_end_user: c.age_of_end_user || '',
+      saving_scheme: c.saving_scheme || '',
+      catchment_area: c.catchment_area || '',
+      next_follow_up: c.next_follow_up || '',
+      summary_notes: c.summary_notes || '',
+      
+      // Preferences
+      preferred_metal: c.preferred_metal || '',
+      preferred_stone: c.preferred_stone || '',
+      budget_range: c.budget_range || '',
+      customer_type: c.customer_type || '',
+      ring_size: c.ring_size || '',
+      customer_interests: c.customer_interests || '',
+      
+      // Team member info
+      team_member_name: c.team_members ? 
+        `${c.team_members.first_name || ''} ${c.team_members.last_name || ''}`.trim() : ''
     })) || [];
 
-    // Create CSV content
-    let csvContent = '';
+    // Create export content
+    let exportContent = '';
+    let mimeType = '';
+    
     if (params.format === 'csv') {
       // Add headers
-      const headers = params.fields.map(field => field.charAt(0).toUpperCase() + field.slice(1));
-      csvContent = headers.join(',') + '\n';
+      const headers = params.fields.map(field => {
+        // Map field keys to readable labels
+        const fieldLabels: { [key: string]: string } = {
+          'first_name': 'First Name',
+          'last_name': 'Last Name',
+          'name': 'Full Name',
+          'email': 'Email',
+          'phone': 'Phone',
+          'interest': 'Interest',
+          'floor': 'Floor',
+          'status': 'Status',
+          'lead_source': 'Lead Source',
+          'preferred_metal': 'Preferred Metal',
+          'budget_range': 'Budget Range',
+          'customer_type': 'Customer Type',
+          'address': 'Address',
+          'city': 'City',
+          'state': 'State',
+          'country': 'Country',
+          'postal_code': 'Postal Code',
+          'date_of_birth': 'Date of Birth',
+          'anniversary_date': 'Anniversary Date',
+          'preferred_stone': 'Preferred Stone',
+          'ring_size': 'Ring Size',
+          'notes': 'Notes',
+          'community': 'Community',
+          'mother_tongue': 'Mother Tongue',
+          'reason_for_visit': 'Reason for Visit',
+          'age_of_end_user': 'Age of End User',
+          'saving_scheme': 'Saving Scheme',
+          'catchment_area': 'Catchment Area',
+          'next_follow_up': 'Next Follow Up',
+          'summary_notes': 'Summary Notes',
+          'customer_interests': 'Customer Interests',
+          'created_at': 'Created Date',
+          'updated_at': 'Updated Date',
+          'visited_date': 'Visited Date',
+          'assigned_to': 'Assigned To',
+          'team_member_name': 'Team Member'
+        };
+        return fieldLabels[field] || field.charAt(0).toUpperCase() + field.slice(1);
+      });
+      
+      exportContent = headers.join(',') + '\n';
       
       // Add data rows
       exportData.forEach((row: any) => {
         const values = params.fields.map(field => {
-          const value = row[field];
+          const value = row[field] || '';
           // Escape commas and quotes in CSV
           if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
             return `"${value.replace(/"/g, '""')}"`;
           }
-          return value || '';
+          return value;
         });
-        csvContent += values.join(',') + '\n';
+        exportContent += values.join(',') + '\n';
       });
-    } else {
-      // JSON format
-      csvContent = JSON.stringify(exportData, null, 2);
+      
+      mimeType = 'text/csv';
+    } else if (params.format === 'json') {
+      exportContent = JSON.stringify(exportData, null, 2);
+      mimeType = 'application/json';
+    } else if (params.format === 'xlsx') {
+      // For XLSX, we'll create a CSV that Excel can open
+      const headers = params.fields.map(field => {
+        const fieldLabels: { [key: string]: string } = {
+          'first_name': 'First Name',
+          'last_name': 'Last Name',
+          'name': 'Full Name',
+          'email': 'Email',
+          'phone': 'Phone',
+          'interest': 'Interest',
+          'floor': 'Floor',
+          'status': 'Status',
+          'lead_source': 'Lead Source',
+          'preferred_metal': 'Preferred Metal',
+          'budget_range': 'Budget Range',
+          'customer_type': 'Customer Type',
+          'address': 'Address',
+          'city': 'City',
+          'state': 'State',
+          'country': 'Country',
+          'postal_code': 'Postal Code',
+          'date_of_birth': 'Date of Birth',
+          'anniversary_date': 'Anniversary Date',
+          'preferred_stone': 'Preferred Stone',
+          'ring_size': 'Ring Size',
+          'notes': 'Notes',
+          'community': 'Community',
+          'mother_tongue': 'Mother Tongue',
+          'reason_for_visit': 'Reason for Visit',
+          'age_of_end_user': 'Age of End User',
+          'saving_scheme': 'Saving Scheme',
+          'catchment_area': 'Catchment Area',
+          'next_follow_up': 'Next Follow Up',
+          'summary_notes': 'Summary Notes',
+          'customer_interests': 'Customer Interests',
+          'created_at': 'Created Date',
+          'updated_at': 'Updated Date',
+          'visited_date': 'Visited Date',
+          'assigned_to': 'Assigned To',
+          'team_member_name': 'Team Member'
+        };
+        return fieldLabels[field] || field.charAt(0).toUpperCase() + field.slice(1);
+      });
+      
+      exportContent = headers.join('\t') + '\n';
+      
+      exportData.forEach((row: any) => {
+        const values = params.fields.map(field => row[field] || '');
+        exportContent += values.join('\t') + '\n';
+      });
+      
+      mimeType = 'application/vnd.ms-excel';
     }
 
     // Create blob
-    const blob = new Blob([csvContent], { 
-      type: params.format === 'csv' ? 'text/csv' : 'application/json' 
-    });
+    const blob = new Blob([exportContent], { type: mimeType });
 
     return {
       data: blob,
@@ -1191,6 +1424,15 @@ class ApiService {
 
   async createCustomer(customerData: Partial<Client> & { phone: string; floor: number }): Promise<ApiResponse<any>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
+      // Get current user context for audit logging
+      const currentUser = await this.getCurrentUser();
+      if (!currentUser) {
+        throw new Error('Unable to get user context. Please try logging in again.');
+      }
+      
       // Provide sensible defaults while letting caller override
       const nowDate = new Date().toISOString().split('T')[0];
 
@@ -1265,6 +1507,13 @@ class ApiService {
         error = retry.error as any;
       }
 
+      // If insert fails due to audit trigger issues, try to disable audit temporarily
+      if (error && error.message.includes('user_context')) {
+        console.warn('Create customer failed due to audit trigger issues. This suggests a database configuration problem.');
+        console.warn('Please run the fix-user-context-error.sql script in your database or contact your database administrator.');
+        throw new Error('Database audit system configuration issue. Please contact support.');
+      }
+
       if (error) throw new Error(error.message);
 
       // Automatically create a visit record for dashboard statistics
@@ -1292,6 +1541,9 @@ class ApiService {
 
   async updateCustomer(id: number, customerData: Partial<Client>): Promise<ApiResponse<any>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
       // Whitelist columns to prevent unknown-column errors
       const allowedColumns = new Set([
         'name','phone','interest','floor','visited_date','assigned_to','notes','status',
@@ -1340,6 +1592,9 @@ class ApiService {
 
   async deleteCustomer(id: number): Promise<ApiResponse<void>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
       const { error } = await supabase
         .from('customers')
         .delete()
@@ -1501,6 +1756,9 @@ class ApiService {
     notes?: string;
   }): Promise<ApiResponse<any>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
       const { data, error } = await supabase
         .from('orders')
         .insert({
@@ -1551,6 +1809,9 @@ class ApiService {
     notes: string;
   }>): Promise<ApiResponse<any>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
       const { data, error } = await supabase
         .from('orders')
         .update({
@@ -2096,8 +2357,6 @@ class ApiService {
         throw new Error('Failed to create category');
       }
 
-      console.log('Created new category:', newCategory);
-      
       return this.handleSupabaseResponse(newCategory);
     } catch (error) {
       console.error('Error creating category:', error);
@@ -2148,8 +2407,6 @@ class ApiService {
         throw new Error('Failed to update category');
       }
 
-      console.log('Updated category:', updatedCategory);
-      
       return this.handleSupabaseResponse(updatedCategory);
     } catch (error) {
       console.error('Error updating category:', error);
@@ -2381,12 +2638,10 @@ class ApiService {
 
       // Get unique sender IDs from messages
       const senderIds = [...new Set(messages.filter(m => m.sender_id).map(m => m.sender_id))];
-      console.log('Found sender IDs in messages:', senderIds);
       
       let teamMembers: any[] = [];
       if (senderIds.length > 0) {
         // First, let's see what's actually in the team_members table
-        console.log('Fetching team members for IDs:', senderIds);
         
         // Try to get ALL team members first to see what's available
         const { data: allMembers, error: allMembersError } = await supabase
@@ -2396,8 +2651,6 @@ class ApiService {
         
         if (allMembersError) {
           console.warn('Warning: Could not fetch all team members:', allMembersError);
-        } else {
-          console.log('All team members in table:', allMembers);
         }
         
         // Now try to get specific team members
@@ -2410,12 +2663,10 @@ class ApiService {
           console.warn('Warning: Could not fetch specific team members:', membersError);
         } else {
           teamMembers = members || [];
-          console.log('Successfully fetched specific team members:', teamMembers);
         }
         
         // If no team members found, try to populate from auth users
         if (teamMembers.length === 0) {
-          console.log('No team members found, attempting to populate from auth users...');
           await this.populateTeamMembersFromAuth(senderIds);
           
           // Try fetching team members again
@@ -2426,22 +2677,13 @@ class ApiService {
           
           if (!retryError && retryMembers) {
             teamMembers = retryMembers;
-            console.log('Successfully populated and fetched team members:', teamMembers);
           }
         }
-      } else {
-        console.log('No sender IDs found in messages');
       }
 
               // Transform data to include sender names
         const transformedData = (messages || []).map((message: any) => {
           const sender = teamMembers.find(m => m.id === message.sender_id);
-          
-          // Debug logging
-          console.log('Processing message:', message);
-          console.log('Looking for sender_id:', message.sender_id);
-          console.log('Available team members:', teamMembers);
-          console.log('Found sender:', sender);
           
           // If no team member found, try to get basic user info
           let senderName = 'Unknown User';
@@ -2452,7 +2694,6 @@ class ApiService {
             senderRole = sender.role || 'Unknown';
           } else if (message.sender_id) {
             // Fallback: try to get user info from auth.users
-            console.log('No team member found, trying auth.users fallback for:', message.sender_id);
             // For now, use the sender_id as a fallback name
             senderName = `User ${message.sender_id.slice(0, 8)}...`;
             senderRole = 'User';
@@ -2464,11 +2705,8 @@ class ApiService {
             sender_role: senderRole
           };
           
-          console.log('Transformed message:', result);
           return result;
         });
-      
-      console.log('Final transformed data:', transformedData);
       return this.handleSupabaseResponse(transformedData);
     } catch (error) {
       console.error('Error fetching ticket messages:', error);
@@ -2486,12 +2724,6 @@ class ApiService {
       }
 
       // Debug: Log the data being sent
-      console.log('Creating ticket message with data:', {
-        ticketId,
-        messageContent,
-        sender_id: messageData.sender_id,
-        is_internal: messageData.is_internal
-      });
 
       // sender_id is optional in the database schema, so we don't require it
       const insertData: any = {
@@ -2671,8 +2903,6 @@ class ApiService {
   // Helper function to populate team_members table from auth users
   private async populateTeamMembersFromAuth(userIds: string[]): Promise<void> {
     try {
-      console.log('Attempting to populate team_members from auth users:', userIds);
-      
       for (const userId of userIds) {
         try {
           // Create a basic team member entry based on the user ID
@@ -2695,8 +2925,6 @@ class ApiService {
           
           if (insertError) {
             console.warn(`Could not insert team member ${userId}:`, insertError);
-          } else {
-            console.log(`Successfully created team member for ${userId}`);
           }
         } catch (error) {
           console.warn(`Error processing user ${userId}:`, error);
@@ -3003,8 +3231,19 @@ class ApiService {
 
   async getClientAuditLogs(clientId: string): Promise<ApiResponse<any[]>> {
     try {
-      // TODO: Implement real audit logs API when table exists
-      return this.handleSupabaseResponse([]);
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('table_name', 'customers')
+        .eq('record_id', parseInt(clientId))
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching client audit logs:', error);
+        throw new Error('Failed to fetch client audit logs');
+      }
+
+      return this.handleSupabaseResponse(data || []);
     } catch (error) {
       console.error('Error fetching client audit logs:', error);
       throw new Error('Failed to fetch client audit logs');
@@ -3044,17 +3283,142 @@ class ApiService {
     }
   }
 
-  async importCustomers(importData: any): Promise<ApiResponse<any>> {
+  async importCustomers(importData: any[]): Promise<ApiResponse<any>> {
     try {
-      // Mock import result
-      const importResult = {
-        total_imported: 10,
-        success_count: 8,
-        error_count: 2,
-        errors: ['Invalid email format', 'Missing phone number']
+      if (!Array.isArray(importData) || importData.length === 0) {
+        throw new Error('Invalid import data: expected non-empty array');
+      }
+
+      const results = {
+        total_imported: importData.length,
+        success_count: 0,
+        error_count: 0,
+        errors: [] as string[],
+        imported_customers: [] as any[]
       };
 
-      return this.handleSupabaseResponse(importResult);
+      // Process each customer
+      for (let i = 0; i < importData.length; i++) {
+        const customerData = importData[i];
+        
+        try {
+          // Validate required fields
+          if (!customerData.name || !customerData.phone || !customerData.floor) {
+            results.error_count++;
+            results.errors.push(`Row ${i + 1}: Missing required fields (name, phone, floor)`);
+            continue;
+          }
+
+          // Check if customer already exists (by phone)
+          const { data: existingCustomer } = await supabase
+            .from('customers')
+            .select('id')
+            .eq('phone', customerData.phone)
+            .single();
+
+          if (existingCustomer) {
+            // Update existing customer
+            const { data: updatedCustomer, error: updateError } = await supabase
+              .from('customers')
+              .update({
+                name: customerData.name,
+                interest: customerData.interest || '',
+                floor: parseInt(customerData.floor),
+                visited_date: customerData.visited_date || new Date().toISOString().split('T')[0],
+                status: customerData.status || 'active',
+                notes: customerData.notes || '',
+                email: customerData.email || '',
+                address: customerData.address || '',
+                city: customerData.city || '',
+                state: customerData.state || '',
+                country: customerData.country || '',
+                postal_code: customerData.postal_code || '',
+                date_of_birth: customerData.date_of_birth || '',
+                anniversary_date: customerData.anniversary_date || '',
+                community: customerData.community || '',
+                mother_tongue: customerData.mother_tongue || '',
+                reason_for_visit: customerData.reason_for_visit || '',
+                lead_source: customerData.lead_source || '',
+                age_of_end_user: customerData.age_of_end_user || '',
+                saving_scheme: customerData.saving_scheme || '',
+                catchment_area: customerData.catchment_area || '',
+                next_follow_up: customerData.next_follow_up || '',
+                summary_notes: customerData.summary_notes || '',
+                preferred_metal: customerData.preferred_metal || '',
+                preferred_stone: customerData.preferred_stone || '',
+                budget_range: customerData.budget_range || '',
+                customer_type: customerData.customer_type || '',
+                ring_size: customerData.ring_size || '',
+                customer_interests: customerData.customer_interests || '',
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', existingCustomer.id)
+              .select()
+              .single();
+
+            if (updateError) {
+              results.error_count++;
+              results.errors.push(`Row ${i + 1}: Failed to update existing customer - ${updateError.message}`);
+            } else {
+              results.success_count++;
+              results.imported_customers.push(updatedCustomer);
+            }
+          } else {
+            // Create new customer
+            const { data: newCustomer, error: insertError } = await supabase
+              .from('customers')
+              .insert([{
+                name: customerData.name,
+                phone: customerData.phone,
+                interest: customerData.interest || '',
+                floor: parseInt(customerData.floor),
+                visited_date: customerData.visited_date || new Date().toISOString().split('T')[0],
+                status: customerData.status || 'active',
+                notes: customerData.notes || '',
+                email: customerData.email || '',
+                address: customerData.address || '',
+                city: customerData.city || '',
+                state: customerData.state || '',
+                country: customerData.country || '',
+                postal_code: customerData.postal_code || '',
+                date_of_birth: customerData.date_of_birth || '',
+                anniversary_date: customerData.anniversary_date || '',
+                community: customerData.community || '',
+                mother_tongue: customerData.mother_tongue || '',
+                reason_for_visit: customerData.reason_for_visit || '',
+                lead_source: customerData.lead_source || '',
+                age_of_end_user: customerData.age_of_end_user || '',
+                saving_scheme: customerData.saving_scheme || '',
+                catchment_area: customerData.catchment_area || '',
+                next_follow_up: customerData.next_follow_up || '',
+                summary_notes: customerData.summary_notes || '',
+                preferred_metal: customerData.preferred_metal || '',
+                preferred_stone: customerData.preferred_stone || '',
+                budget_range: customerData.budget_range || '',
+                customer_type: customerData.customer_type || '',
+                ring_size: customerData.ring_size || '',
+                customer_interests: customerData.customer_interests || '',
+                created_at: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              }])
+              .select()
+              .single();
+
+            if (insertError) {
+              results.error_count++;
+              results.errors.push(`Row ${i + 1}: Failed to create customer - ${insertError.message}`);
+            } else {
+              results.success_count++;
+              results.imported_customers.push(newCustomer);
+            }
+          }
+        } catch (error: any) {
+          results.error_count++;
+          results.errors.push(`Row ${i + 1}: ${error.message}`);
+        }
+      }
+
+      return this.handleSupabaseResponse(results);
     } catch (error) {
       console.error('Error importing customers:', error);
       throw new Error('Failed to import customers');
@@ -3439,17 +3803,274 @@ class ApiService {
     }
   }
 
-  // Missing methods for product management
+  // Product export method
+  async exportProducts(params: {
+    format: string;
+    fields: string[];
+    category?: string;
+    store?: number;
+  }): Promise<ApiResponse<Blob>> {
+    let query = supabase.from('products').select('*');
+
+    if (params.category && params.category !== 'all') {
+      query = query.eq('category', params.category);
+    }
+
+    if (params.store && params.store !== 0) {
+      query = query.eq('store', params.store);
+    }
+
+    const { data, error } = await query;
+    
+    if (error) throw new Error(error.message);
+
+    // Transform data for export
+    const exportData = data?.map((p: any) => ({
+      // Core fields
+      name: p.name || '',
+      sku: p.sku || '',
+      type: p.type || '',
+      category: p.category || '',
+      price: p.price || '',
+      cost_price: p.cost_price || '',
+      selling_price: p.selling_price || '',
+      discount_price: p.discount_price || '',
+      quantity: p.quantity || '',
+      min_quantity: p.min_quantity || '',
+      max_quantity: p.max_quantity || '',
+      status: p.status || '',
+      
+      // Additional fields
+      description: p.description || '',
+      image_url: p.image_url || '',
+      main_image: p.main_image || '',
+      weight: p.weight || '',
+      dimensions: p.dimensions || '',
+      material: p.material || '',
+      color: p.color || '',
+      size: p.size || '',
+      is_featured: p.is_featured || '',
+      is_bestseller: p.is_bestseller || '',
+      store: p.store || '',
+      store_name: p.store_name || '',
+      scope: p.scope || '',
+      is_in_stock: p.is_in_stock || '',
+      is_low_stock: p.is_low_stock || '',
+      current_price: p.current_price || '',
+      profit_margin: p.profit_margin || '',
+      variant_count: p.variant_count || '',
+      created_at: p.created_at || '',
+      updated_at: p.updated_at || ''
+    })) || [];
+
+    // Create export content
+    let exportContent = '';
+    let mimeType = '';
+    
+    if (params.format === 'csv') {
+      // Add headers
+      const headers = params.fields.map(field => {
+        const fieldLabels: { [key: string]: string } = {
+          'name': 'Product Name',
+          'sku': 'SKU',
+          'type': 'Type',
+          'category': 'Category',
+          'price': 'Price',
+          'cost_price': 'Cost Price',
+          'selling_price': 'Selling Price',
+          'discount_price': 'Discount Price',
+          'quantity': 'Quantity',
+          'min_quantity': 'Min Quantity',
+          'max_quantity': 'Max Quantity',
+          'status': 'Status',
+          'description': 'Description',
+          'image_url': 'Image URL',
+          'main_image': 'Main Image',
+          'weight': 'Weight',
+          'dimensions': 'Dimensions',
+          'material': 'Material',
+          'color': 'Color',
+          'size': 'Size',
+          'is_featured': 'Is Featured',
+          'is_bestseller': 'Is Bestseller',
+          'store': 'Store ID',
+          'store_name': 'Store Name',
+          'scope': 'Scope',
+          'is_in_stock': 'In Stock',
+          'is_low_stock': 'Low Stock',
+          'current_price': 'Current Price',
+          'profit_margin': 'Profit Margin',
+          'variant_count': 'Variant Count',
+          'created_at': 'Created Date',
+          'updated_at': 'Updated Date'
+        };
+        return fieldLabels[field] || field.charAt(0).toUpperCase() + field.slice(1);
+      });
+      
+      exportContent = headers.join(',') + '\n';
+      
+      // Add data rows
+      exportData.forEach((row: any) => {
+        const values = params.fields.map(field => {
+          const value = row[field] || '';
+          // Escape commas and quotes in CSV
+          if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        });
+        exportContent += values.join(',') + '\n';
+      });
+      
+      mimeType = 'text/csv';
+    } else if (params.format === 'json') {
+      exportContent = JSON.stringify(exportData, null, 2);
+      mimeType = 'application/json';
+    } else if (params.format === 'xlsx') {
+      // For XLSX, create tab-separated content that Excel can open
+      const headers = params.fields.map(field => {
+        const fieldLabels: { [key: string]: string } = {
+          'name': 'Product Name',
+          'sku': 'SKU',
+          'type': 'Type',
+          'category': 'Category',
+          'price': 'Price',
+          'cost_price': 'Cost Price',
+          'selling_price': 'Selling Price',
+          'discount_price': 'Discount Price',
+          'quantity': 'Quantity',
+          'min_quantity': 'Min Quantity',
+          'max_quantity': 'Max Quantity',
+          'status': 'Status',
+          'description': 'Description',
+          'image_url': 'Image URL',
+          'main_image': 'Main Image',
+          'weight': 'Weight',
+          'dimensions': 'Dimensions',
+          'material': 'Material',
+          'color': 'Color',
+          'size': 'Size',
+          'is_featured': 'Is Featured',
+          'is_bestseller': 'Is Bestseller',
+          'store': 'Store ID',
+          'store_name': 'Store Name',
+          'scope': 'Scope',
+          'is_in_stock': 'In Stock',
+          'is_low_stock': 'Low Stock',
+          'current_price': 'Current Price',
+          'profit_margin': 'Profit Margin',
+          'variant_count': 'Variant Count',
+          'created_at': 'Created Date',
+          'updated_at': 'Updated Date'
+        };
+        return fieldLabels[field] || field.charAt(0).toUpperCase() + field.slice(1);
+      });
+      
+      exportContent = headers.join('\t') + '\n';
+      
+      exportData.forEach((row: any) => {
+        const values = params.fields.map(field => row[field] || '');
+        exportContent += values.join('\t') + '\n';
+      });
+      
+      mimeType = 'application/vnd.ms-excel';
+    }
+
+    // Create blob
+    const blob = new Blob([exportContent], { type: mimeType });
+
+    return {
+      data: blob,
+      success: true,
+    };
+  }
+
+  // Product import method
   async importProducts(formData: FormData): Promise<ApiResponse<any>> {
     try {
-      const { data, error } = await supabase
+      // Get the CSV file from FormData
+      const file = formData.get('file') as File;
+      if (!file) {
+        throw new Error('No file provided');
+      }
+
+      // Parse CSV content
+      const csvText = await file.text();
+      const lines = csvText.split('\n').filter(line => line.trim());
+      
+      if (lines.length < 2) {
+        throw new Error('CSV file must have at least a header row and one data row');
+      }
+
+      const headers = lines[0].split(',').map(h => h.trim());
+      const products = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.trim()) continue;
+
+        const values = line.split(',').map(v => v.trim());
+        if (values.length < headers.length) continue;
+
+        const product: any = {};
+        headers.forEach((header, index) => {
+          let value = values[index] || '';
+          // Remove quotes if present
+          if (value.startsWith('"') && value.endsWith('"')) {
+            value = value.slice(1, -1);
+          }
+          product[header] = value;
+        });
+
+        // Validate required fields
+        if (!product.name || !product.sku) {
+          continue; // Skip invalid rows
+        }
+
+        // Set default values
+        product.status = product.status || 'active';
+        product.created_at = new Date().toISOString();
+        product.updated_at = new Date().toISOString();
+
+        products.push(product);
+      }
+
+      if (products.length === 0) {
+        throw new Error('No valid products found in CSV file');
+      }
+
+      // Insert products in batches
+      const batchSize = 50;
+      const results = {
+        total_imported: products.length,
+        success_count: 0,
+        error_count: 0,
+        errors: [] as string[],
+        imported_products: [] as any[]
+      };
+
+      for (let i = 0; i < products.length; i += batchSize) {
+        const batch = products.slice(i, i + batchSize);
+        
+        const { data: insertedProducts, error: insertError } = await supabase
         .from('products')
-        .insert([formData])
+          .insert(batch)
         .select();
 
-      if (error) throw error;
-      return { success: true, data };
+        if (insertError) {
+          results.error_count += batch.length;
+          results.errors.push(`Batch ${Math.floor(i / batchSize) + 1}: ${insertError.message}`);
+        } else {
+          results.success_count += batch.length;
+          if (insertedProducts) {
+            results.imported_products.push(...insertedProducts);
+          }
+        }
+      }
+
+      return this.handleSupabaseResponse(results);
     } catch (error: any) {
+      console.error('Error importing products:', error);
       return { success: false, data: null, message: error.message };
     }
   }
@@ -3543,6 +4164,141 @@ class ApiService {
 
       if (error) throw error;
       return { success: true, data };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
+    }
+  }
+
+  // ================================
+  // AUDIT LOG METHODS
+  // ================================
+
+  /**
+   * Get all audit logs with filtering and pagination
+   */
+  async getAuditLogs(filters: any = {}): Promise<ApiResponse<any[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return { success: true, data: data || [] };
+    } catch (error: any) {
+      return { success: false, data: [], message: error.message };
+    }
+  }
+
+  /**
+   * Get audit logs for a specific table
+   */
+  async getTableAuditLogs(tableName: string, limit: number = 100): Promise<ApiResponse<any[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('table_name', tableName)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return { success: true, data: data || [] };
+    } catch (error: any) {
+      return { success: false, data: [], message: error.message };
+    }
+  }
+
+  /**
+   * Get audit logs for a specific user
+   */
+  async getUserAuditLogs(userId: string, limit: number = 50): Promise<ApiResponse<any[]>> {
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
+
+      if (error) throw error;
+      return { success: true, data: data || [] };
+    } catch (error: any) {
+      return { success: false, data: [], message: error.message };
+    }
+  }
+
+  /**
+   * Get audit summary statistics
+   */
+  async getAuditSummary(dateFrom?: string, dateTo?: string): Promise<ApiResponse<any>> {
+    try {
+      let query = supabase
+        .from('audit_logs')
+        .select('action, table_name, user_email, created_at');
+
+      if (dateFrom) {
+        query = query.gte('created_at', dateFrom);
+      }
+      if (dateTo) {
+        query = query.lte('created_at', dateTo);
+      }
+
+      const { data, error } = await query;
+
+      if (error) throw error;
+
+      // Process data to create summary
+      const summary = {
+        total_actions: data?.length || 0,
+        actions_by_type: {} as Record<string, number>,
+        actions_by_user: {} as Record<string, number>,
+        actions_by_table: {} as Record<string, number>,
+        recent_activity: data?.slice(0, 10) || []
+      };
+
+      if (data) {
+        data.forEach(item => {
+          // Count by action type
+          summary.actions_by_type[item.action] = (summary.actions_by_type[item.action] || 0) + 1;
+          
+          // Count by user
+          if (item.user_email) {
+            summary.actions_by_user[item.user_email] = (summary.actions_by_user[item.user_email] || 0) + 1;
+          }
+          
+          // Count by table
+          summary.actions_by_table[item.table_name] = (summary.actions_by_table[item.table_name] || 0) + 1;
+        });
+      }
+
+      return { success: true, data: summary };
+    } catch (error: any) {
+      return { success: false, data: null, message: error.message };
+    }
+  }
+
+  /**
+   * Export audit logs to CSV/Excel
+   */
+  async exportAuditLogs(filters: any = {}, format: 'csv' | 'excel' = 'csv'): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('audit_logs')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // TODO: Implement actual export logic based on format
+      const exportData = {
+        format,
+        record_count: data?.length || 0,
+        data: data || [],
+        exported_at: new Date().toISOString()
+      };
+
+      return { success: true, data: exportData };
     } catch (error: any) {
       return { success: false, data: null, message: error.message };
     }

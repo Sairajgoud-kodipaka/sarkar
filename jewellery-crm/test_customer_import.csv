@@ -1,0 +1,2 @@
+name,phone,interest,floor,visited_date,status,notes,assigned_to,email,address,city
+Test Customer Import,9876543210,Gold Ring,1,2025-01-15,active,Test import customer,Ashok,test@email.com,123 Test St,Test City

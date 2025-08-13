@@ -209,27 +209,22 @@ export function StoreManagerDashboard() {
   };
 
   React.useEffect(() => {
-    checkAuthAndFetchData();
-  }, []);
+    if (user) {
+      fetchDashboardData();
+    }
+  }, [user]);
 
   const checkAuthAndFetchData = async () => {
     try {
-      console.log('🔐 Checking authentication...');
-      console.log('Auth state:', { isAuthenticated, user });
-      
       if (!isAuthenticated || !user) {
-        console.log('⚠️ User not authenticated, attempting auto-login...');
         const loginSuccess = await login('rara', 'password123');
         if (loginSuccess) {
-          console.log('✅ Auto-login successful');
           fetchDashboardData();
         } else {
-          console.log('❌ Auto-login failed, redirecting to login');
           router.push('/login');
           return;
         }
       } else {
-        console.log('✅ User is authenticated, fetching data...');
         fetchDashboardData();
       }
     } catch (error) {
@@ -241,8 +236,6 @@ export function StoreManagerDashboard() {
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Starting to fetch dashboard data...');
-      console.log('🔐 Auth token check:', !!localStorage.getItem('auth-storage'));
       
       // Initialize variables
       let totalCustomers = 0;
@@ -264,23 +257,17 @@ export function StoreManagerDashboard() {
 
       // Use authenticated user from auth hook
       const authenticatedUser = user;
-      console.log('👤 Using authenticated user:', authenticatedUser);
       if (authenticatedUser) {
         setCurrentUser(authenticatedUser as any);
-        console.log('✅ Current user set:', authenticatedUser);
       } else {
-        console.log('❌ No authenticated user available');
         return;
       }
 
       // Fetch team members
-      console.log('👥 Fetching team members...');
       try {
         teamResponse = await apiService.getTeamMembers();
-        console.log('Team response:', teamResponse);
         if (Array.isArray(teamResponse)) {
           const teamMembers = teamResponse;
-          console.log('Team members found:', teamMembers.length);
           const teamPerformanceData: TeamMemberDisplay[] = teamMembers.map((member: any) => ({
             id: String(member.id),
             name: `${member.first_name ?? member.firstName ?? ''} ${member.last_name ?? member.lastName ?? ''}`.trim(),
@@ -292,49 +279,30 @@ export function StoreManagerDashboard() {
             target: 100000,
           }));
           setTeamPerformance(teamPerformanceData);
-          console.log('✅ Team performance data set:', teamPerformanceData);
-        } else {
-          console.log('❌ Failed to get team members:', teamResponse);
         }
       } catch (error) {
         console.error('❌ Error fetching team members:', error);
       }
 
       // Fetch customers
-      console.log('👥 Fetching customers...');
       try {
         customersResponse = await apiService.getCustomers();
-        console.log('Customers response:', customersResponse);
         if (customersResponse.success && customersResponse.data) {
           const customers = Array.isArray(customersResponse.data) ? customersResponse.data : [];
           totalCustomers = customers.length;
-          console.log('Total customers found:', totalCustomers);
           // Calculate new customers today (simplified logic)
           const today = new Date().toISOString().split('T')[0];
           newTodayCustomers = customers.filter((customer: Client) => 
             customer.created_at?.startsWith(today)
           ).length;
-          console.log('New customers today:', newTodayCustomers);
-        } else {
-          console.log('❌ Failed to get customers:', customersResponse);
         }
       } catch (error) {
         console.error('❌ Error fetching customers:', error);
       }
 
       // Fetch products
-      console.log('📦 Fetching products...');
       try {
         productsResponse = await apiService.getProducts();
-        console.log('Products response:', productsResponse);
-        console.log('Products response success:', productsResponse?.success);
-        console.log('Products response data:', productsResponse?.data);
-        console.log('Products response message:', productsResponse?.message);
-        console.log('Products response data type:', typeof productsResponse?.data);
-        console.log('Products response data is array:', Array.isArray(productsResponse?.data));
-        if (productsResponse?.data && typeof productsResponse.data === 'object') {
-          console.log('Products response data keys:', Object.keys(productsResponse.data));
-        }
         
         if (productsResponse.success && productsResponse.data) {
           // Handle different response formats like the inventory page
@@ -351,15 +319,12 @@ export function StoreManagerDashboard() {
           }
           
           totalProducts = products.length;
-          console.log('Total products found:', totalProducts);
-          console.log('Products data:', products);
           
           lowStockProducts = products.filter((product: Product) => {
             const qty = (product as any).quantity ?? (product as any).stock_quantity ?? 0;
             const minQty = (product as any).min_quantity ?? 0;
             return qty <= minQty;
           }).length;
-          console.log('Low stock products:', lowStockProducts);
           
           // Calculate new arrivals (products created in last 7 days)
           const weekAgo = new Date();
@@ -370,9 +335,7 @@ export function StoreManagerDashboard() {
             const dt = new Date(createdAt);
             return !isNaN(dt.getTime()) && dt > weekAgo;
           }).length;
-          console.log('New arrivals:', newArrivals);
         } else {
-          console.log('❌ Failed to get products:', productsResponse);
           totalProducts = 0;
           lowStockProducts = 0;
           newArrivals = 0;
@@ -386,11 +349,9 @@ export function StoreManagerDashboard() {
       }
 
       // Fetch sales
-      console.log('💰 Fetching sales...');
       try {
         // Use the new manager dashboard API that includes closed won pipelines
         const dashboardResponse = await apiService.getManagerDashboard();
-        console.log('Manager Dashboard response:', dashboardResponse);
         
         if (dashboardResponse.success && dashboardResponse.data) {
           const dashboardData = dashboardResponse.data;
@@ -398,17 +359,11 @@ export function StoreManagerDashboard() {
           // Update revenue with combined sales + closed won pipelines
           todaySales = 0; // Today's sales would need separate calculation
           monthlyRevenue = dashboardData.monthly_revenue || 0;
-          
-          console.log('Manager dashboard data:', dashboardData);
-          console.log('Monthly revenue (including closed won):', monthlyRevenue);
         } else {
-          console.log('❌ Failed to get manager dashboard:', dashboardResponse);
           // Fallback to old sales API
           salesResponse = await apiService.getSales();
-          console.log('Sales response:', salesResponse);
           if (salesResponse.success && salesResponse.data) {
             const sales = Array.isArray(salesResponse.data) ? salesResponse.data : [];
-            console.log('Total sales found:', sales.length);
             const today = new Date().toISOString().split('T')[0];
             const thisMonth = new Date().getMonth();
             const thisYear = new Date().getFullYear();
@@ -416,15 +371,12 @@ export function StoreManagerDashboard() {
             todaySales = sales
               .filter((sale: Sale) => (sale as any).date?.startsWith(today))
               .reduce((sum: number, sale: Sale) => sum + ((sale as any).amount ?? 0), 0);
-            console.log('Today sales:', todaySales);
             
             monthlyRevenue = sales.filter((sale: Sale) => {
               const saleDate = new Date((sale as any).date);
               return saleDate.getMonth() === thisMonth && saleDate.getFullYear() === thisYear;
             }).reduce((sum: number, sale: Sale) => sum + ((sale as any).amount ?? 0), 0);
-            console.log('Monthly revenue:', monthlyRevenue);
           } else {
-            console.log('❌ Failed to get sales:', salesResponse);
             // Set default values when no sales data
             todaySales = 0;
             monthlyRevenue = 0;
@@ -438,16 +390,12 @@ export function StoreManagerDashboard() {
       }
 
       // Fetch Business Admin Dashboard Data for Manager's Store
-      console.log('📊 Fetching business admin dashboard data...');
       try {
         const businessDashboardResponse = await apiService.getDashboardStats();
-        console.log('Business Admin Dashboard response:', businessDashboardResponse);
         
         if (businessDashboardResponse.success && businessDashboardResponse.data) {
           setDashboardData(businessDashboardResponse.data);
-          console.log('✅ Business admin dashboard data set');
         } else {
-          console.log('❌ Failed to get business admin dashboard:', businessDashboardResponse);
           setDashboardError('Failed to load dashboard data');
         }
       } catch (error) {
@@ -456,13 +404,10 @@ export function StoreManagerDashboard() {
       }
 
       // Fetch appointments
-      console.log('📅 Fetching appointments...');
       try {
         appointmentsResponse = await apiService.getAppointments();
-        console.log('Appointments response:', appointmentsResponse);
         if (appointmentsResponse.success && appointmentsResponse.data) {
           const appointments = Array.isArray(appointmentsResponse.data) ? appointmentsResponse.data : [];
-          console.log('Total appointments found:', appointments.length);
           const today = new Date().toISOString().split('T')[0];
 
           todaysAppointmentsData = appointments
@@ -480,16 +425,12 @@ export function StoreManagerDashboard() {
               status: (apt.status ?? 'pending') as 'confirmed' | 'completed' | 'pending' | 'cancelled',
             }));
           appointmentsCount = todaysAppointmentsData.length;
-          console.log('Today appointments:', appointmentsCount);
-        } else {
-          console.log('❌ Failed to get appointments:', appointmentsResponse);
         }
       } catch (error) {
         console.error('❌ Error fetching appointments:', error);
       }
 
       // Update store metrics with the fetched data
-      console.log('📊 Updating store metrics...');
       setStoreMetrics({
         store: {
           name: (authenticatedUser as any)?.store_name || (authenticatedUser as any)?.storeName || (authenticatedUser as any)?.first_name || 'Store Dashboard',
@@ -547,8 +488,6 @@ export function StoreManagerDashboard() {
         }
       ];
       setStoreActivities(activities);
-
-      console.log('✅ Dashboard data fetch completed successfully!');
 
     } catch (error) {
       console.error('❌ Error fetching dashboard data:', error);

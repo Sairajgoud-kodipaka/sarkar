@@ -9,13 +9,14 @@ import { Textarea } from '@/components/ui/textarea';
 import { Loader2, X, AlertCircle, Plus } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/hooks/useAuth';
 
 // Module-level constants to avoid recreating large arrays/objects on each render
 const PREDEFINED_OPTIONS = {
     metals: ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl', 'Ruby', 'Emerald', 'Sapphire', 'Mixed', 'White Gold', 'Rose Gold', 'Yellow Gold'],
     styles: ['Traditional', 'Modern', 'Contemporary', 'Vintage', 'Art Deco', 'Minimalist', 'Bridal', 'Casual', 'Luxury', 'Ethnic', 'Fusion', 'Classic'],
     occasions: ['Wedding', 'Engagement', 'Birthday', 'Anniversary', 'Festival', 'Graduation', 'Corporate', 'Gift', 'Self-Purchase', 'House Warming', 'Baby Shower', 'Karva Chauth', 'Raksha Bandhan', 'Diwali', 'Holi', 'Eid', 'Christmas', 'Gurpurab', 'Paryushan', 'Navratri', 'Dussehra'],
-  communities: ['Hindu', 'Muslim', 'Punjabi', 'Sindhi', 'Jain', 'Christian', 'Sikh', 'Buddhist', 'Parsi'],
+    communities: ['Hindu', 'Muslim', 'Punjabi', 'Sindhi', 'Jain', 'Christian', 'Sikh', 'Buddhist', 'Parsi'],
     leadSources: ['Walk-in', 'Referral', 'Social Media', 'Website', 'Advertisement', 'Exhibition', 'Cold Call', 'Return Customer', 'Online Search', 'Print Media', 'TV/Radio', 'Word of Mouth', 'Employee Referral', 'Partner Referral'],
     reasonsForVisit: ['Browsing', 'Purchase Intent', 'Repair', 'Exchange', 'Consultation', 'Price Inquiry', 'Product Viewing', 'Custom Design', 'Maintenance', 'Insurance Claim', 'Resizing', 'Cleaning', 'Appraisal'],
     ageGroups: ['18-25', '26-35', '36-45', '46-55', '56-65', '65+'],
@@ -29,11 +30,8 @@ const PREDEFINED_OPTIONS = {
     preferredStyles: ['Traditional', 'Modern', 'Contemporary', 'Vintage', 'Art Deco', 'Minimalist', 'Bridal', 'Casual', 'Luxury', 'Ethnic', 'Fusion', 'Classic', 'Bohemian', 'Gothic', 'Renaissance', 'Baroque', 'Rococo', 'Victorian', 'Edwardian', 'Art Nouveau'],
     preferredMetals: ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl', 'Ruby', 'Emerald', 'Sapphire', 'Mixed', 'White Gold', 'Rose Gold', 'Yellow Gold', 'Palladium', 'Titanium', 'Tungsten', 'Stainless Steel', 'Brass', 'Copper', 'Bronze', 'Aluminum'],
     interests: ['Gold Necklace', 'Gold Ring', 'Gold Earrings', 'Gold Bracelet', 'Gold Chain', 'Gold Pendant', 'Silver Jewelry', 'Platinum Ring', 'Diamond Ring', 'Pearl Necklace', 'Ruby Ring', 'Emerald Ring', 'Sapphire Ring', 'Wedding Set', 'Engagement Ring', 'Bridal Jewelry', 'Traditional Jewelry', 'Modern Jewelry', 'Antique Jewelry', 'Custom Design', 'Jewelry Repair', 'Jewelry Exchange', 'Jewelry Consultation', 'Price Inquiry', 'Product Viewing', 'Maintenance Service'],
-    paymentPreferences: ['Cash', 'Card', 'UPI', 'Net Banking', 'EMI', 'Cheque', 'Bank Transfer', 'Digital Wallet', 'Buy Now Pay Later', 'Gold Exchange', 'Partial Payment'],
     customerTypes: ['Individual', 'Family', 'Corporate', 'Bulk Purchase', 'Wedding Party', 'Event Organizer', 'Jewelry Designer', 'Wholesaler', 'Retailer', 'Investor'],
-    followUpPriorities: ['Low', 'Medium', 'High', 'Urgent', 'Critical'],
-    seasons: ['Spring', 'Summer', 'Monsoon', 'Autumn', 'Winter', 'Festival Season', 'Wedding Season', 'Holiday Season', 'All Year Round'],
-    designPreferences: ['Ready Made', 'Custom Design', 'Modification', 'Replica', 'Inspiration Based', 'Mix of Styles', 'Traditional with Modern Twist', 'Contemporary with Ethnic Elements', 'Minimalist', 'Ornate', 'Simple', 'Complex', 'Lightweight', 'Heavy', 'Adjustable', 'Fixed Size']
+    followUpPriorities: ['Low', 'Medium', 'High', 'Urgent', 'Critical']
 } as const;
 
 const CATCHMENT_AREAS_MAP: { [key: string]: string[] } = {
@@ -140,6 +138,7 @@ interface ValidationErrors {
 }
 
 export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCustomerModalProps) {
+  const { user, isAuthenticated } = useAuth();
   const [open, setOpen] = useState(false);
   
   // Use external state if provided, otherwise use internal state
@@ -191,20 +190,15 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
     preferred_style: '',
     preferred_occasion: '',
     budget: '',
-    payment_preference: '',
-    season: '',
-    design_preference: '',
-    // Customer Preferences & Purchase
+    // Product selection
+    product_chosen: '',
+    product_price: '',
+    // Purchase Details
     main_category: '',
     design_selected: false,
-    wants_more_discount: false,
-    checking_other_jewellers: false,
-    felt_less_variety: false,
-    other_preferences: '',
     actual_purchase_amount: '',
-    // Follow-up & summary
+    // Follow-up
     next_follow_up: '',
-    summary_notes: '',
     priority: 'Medium' as 'Low' | 'Medium' | 'High' | 'Urgent' | 'Critical',
     // Notes
     notes: '',
@@ -215,6 +209,10 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
   // Predefined options for common fields (now static module-level constant)
   const predefinedOptions = PREDEFINED_OPTIONS;
 
+  // Product data state
+  const [products, setProducts] = useState<any[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+
   // Dynamic catchment areas based on selected state
   const getCatchmentAreas = (state: string) => {
     return CATCHMENT_AREAS_MAP[state] || [];
@@ -224,6 +222,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
   const loadDropdownData = async () => {
     if (!isModalOpen) return;
     setDropdownLoading(true);
+    setProductsLoading(true);
     try {
       // Static states (no network)
       setStates([...PREDEFINED_OPTIONS.states]);
@@ -234,6 +233,18 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
         setCategories(categoriesResp.data as Category[]);
       } else {
         setCategories([]);
+      }
+
+      // Load products for Product Chosen dropdown
+      try {
+        const productsResp = await apiService.getProducts({ status: 'active' });
+        if (productsResp?.success && Array.isArray(productsResp.data)) {
+          setProducts(productsResp.data);
+        } else {
+          setProducts([]);
+        }
+      } catch {
+        setProducts([]);
       }
 
       // Load team members for "Assign To" (if available)
@@ -249,6 +260,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
       }
     } finally {
       setDropdownLoading(false);
+      setProductsLoading(false);
     }
   };
 
@@ -298,6 +310,24 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
       case 'state':
         if (value.trim() && value.trim().length < 2) return 'State must be at least 2 characters';
         break;
+      case 'product_chosen':
+        if (value && value.trim() && !products.find(p => p.id === value)) {
+          return 'Please select a valid product';
+        }
+        break;
+      case 'product_price':
+        if (value && isNaN(Number(value))) {
+          return 'Product price must be a valid number';
+        }
+        break;
+      case 'actual_purchase_amount':
+        if (value && isNaN(Number(value))) {
+          return 'Purchase amount must be a valid number';
+        }
+        if (value && Number(value) < 0) {
+          return 'Purchase amount cannot be negative';
+        }
+        break;
     }
     return '';
   };
@@ -329,6 +359,19 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
     if (name === 'state') {
       setFormData((prev: any) => ({ ...prev, catchment_area: '' }));
     }
+
+    // Auto-fill product price when product is selected
+    if (name === 'product_chosen') {
+      const selectedProduct = products.find(p => p.id === value);
+      if (selectedProduct) {
+        const price = selectedProduct.salePrice || selectedProduct.basePrice || selectedProduct.price || selectedProduct.selling_price || 0;
+        setFormData((prev: any) => ({ 
+          ...prev, 
+          product_price: price.toString(),
+          actual_purchase_amount: price.toString()
+        }));
+      }
+    }
   };
 
   // Handle boolean field change specifically for checkboxes
@@ -359,6 +402,20 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
         allTouched[key] = true;
       });
       setTouched(allTouched);
+      return;
+    }
+    
+    // Check authentication before proceeding
+    if (!isAuthenticated || !user) {
+      // Show error message and redirect to login
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+      errorMessage.textContent = 'Please log in to create customers. Redirecting to login...';
+      document.body.appendChild(errorMessage);
+      setTimeout(() => {
+        document.body.removeChild(errorMessage);
+        window.location.href = '/login';
+      }, 2000);
       return;
     }
     
@@ -403,23 +460,21 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
         preferred_style: '',
         preferred_occasion: '',
         budget: '',
-        payment_preference: '',
-        season: '',
-        design_preference: '',
+        product_chosen: '',
+        product_price: '',
         main_category: '',
         design_selected: false,
-        wants_more_discount: false,
-        checking_other_jewellers: false,
-        felt_less_variety: false,
-        other_preferences: '',
         actual_purchase_amount: '',
         next_follow_up: '',
-        summary_notes: '',
         priority: 'Medium',
         notes: '',
         visit_time: 'morning',
         customer_type: 'Individual',
       });
+
+      // Reset product data
+      setProducts([]);
+      setProductsLoading(false);
       
       // Reset validation state
       setErrors({});
@@ -441,10 +496,31 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
       }, 3000);
     } catch (error) {
       console.error('Error creating customer:', error);
+      
+      // Handle authentication errors specifically
+      let errorText = 'Failed to create customer. Please try again.';
+      if (error instanceof Error) {
+        if (error.message.includes('Authentication required')) {
+          errorText = 'Please log in to create customers. Redirecting to login...';
+          // Redirect to login after a short delay
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+        } else if (error.message.includes('user_context')) {
+          errorText = 'Session expired. Please log in again. Redirecting to login...';
+          // Redirect to login after a short delay
+          setTimeout(() => {
+            window.location.href = '/login';
+          }, 2000);
+        } else {
+          errorText = error.message || 'Failed to create customer. Please try again.';
+        }
+      }
+      
       // Show error message in a more elegant way
       const errorMessage = document.createElement('div');
       errorMessage.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
-      errorMessage.textContent = 'Failed to create customer. Please try again.';
+      errorMessage.textContent = errorText;
       document.body.appendChild(errorMessage);
       setTimeout(() => {
         document.body.removeChild(errorMessage);
@@ -682,7 +758,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                       value={formData.first_name || ''}
                       onChange={(e) => handleFieldChange('first_name', e.target.value)}
                       onBlur={() => handleFieldBlur('first_name')}
-                    placeholder="e.g., Priya"
+                    placeholder=""
                       className={cn(
                         errors.first_name && touched.first_name && "border-red-500 focus:ring-red-500"
                       )}
@@ -702,7 +778,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                       value={formData.last_name || ''}
                       onChange={(e) => handleFieldChange('last_name', e.target.value)}
                       onBlur={() => handleFieldBlur('last_name')}
-                    placeholder="e.g., Sharma"
+                    placeholder=""
                       className={cn(
                         errors.last_name && touched.last_name && "border-red-500 focus:ring-red-500"
                       )}
@@ -722,7 +798,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                       value={formData.phone || ''}
                       onChange={(e) => handleFieldChange('phone', e.target.value)}
                       onBlur={() => handleFieldBlur('phone')}
-                    placeholder="+91 98XXXXXX00"
+                    placeholder=""
                       className={cn(
                         errors.phone && touched.phone && "border-red-500 focus:ring-red-500"
                       )}
@@ -742,7 +818,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                       value={formData.email || ''}
                       onChange={(e) => handleFieldChange('email', e.target.value)}
                       onBlur={() => handleFieldBlur('email')}
-                    placeholder="priya@example.com"
+                    placeholder=""
                       className={cn(
                         errors.email && touched.email && "border-red-500 focus:ring-red-500"
                       )}
@@ -1064,33 +1140,99 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                     placeholder="Select budget range"
                     label="Budget"
                   />
-                  <SimpleDropdown
-                    value={formData.payment_preference}
-                    onValueChange={(value: string) => handleFieldChange('payment_preference', value)}
-                    options={predefinedOptions.paymentPreferences}
-                    placeholder="Select payment preference"
-                    label="Payment Preference"
-                  />
-                  <SimpleDropdown
-                    value={formData.season}
-                    onValueChange={(value: string) => handleFieldChange('season', value)}
-                    options={predefinedOptions.seasons}
-                    placeholder="Select season"
-                    label="Season"
-                  />
-                  <SimpleDropdown
-                    value={formData.design_preference}
-                    onValueChange={(value: string) => handleFieldChange('design_preference', value)}
-                    options={predefinedOptions.designPreferences}
-                    placeholder="Select design preference"
-                    label="Design Preference"
-                  />
                 </div>
               </div>
 
-              {/* Customer Preferences & Purchase */}
+              {/* Product Selection */}
               <div className="border rounded-lg p-4">
-                <div className="font-semibold mb-4">Customer Preferences & Purchase</div>
+                <div className="font-semibold mb-4">Product Selection</div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Product Chosen</Label>
+                    <Select 
+                      value={formData.product_chosen || ''} 
+                      onValueChange={(value) => handleFieldChange('product_chosen', value)}
+                      disabled={productsLoading}
+                    >
+                      <SelectTrigger className={cn(
+                        errors.product_chosen && touched.product_chosen && "border-red-500 focus:ring-red-500"
+                      )}>
+                        <SelectValue placeholder={productsLoading ? "Loading products..." : "Select a product"} />
+                      </SelectTrigger>
+                      <SelectContent className="max-h-60">
+                        {products.map((product) => (
+                          <SelectItem key={product.id} value={product.id}>
+                            <div className="flex items-center gap-2">
+                              {product.main_image_url && (
+                                <img 
+                                  src={product.main_image_url} 
+                                  alt={product.name}
+                                  className="w-6 h-6 object-cover rounded"
+                                />
+                              )}
+                              <span>{product.name}</span>
+                              <span className="text-gray-500 ml-auto">
+                                ₹{product.salePrice || product.basePrice || product.price || product.selling_price || 0}
+                              </span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {productsLoading && (
+                      <div className="text-xs text-gray-500 flex items-center gap-1">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                        Loading products...
+                      </div>
+                    )}
+                    {formData.product_chosen && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
+                        <div className="text-blue-800 font-medium">Product Selected</div>
+                        <div className="text-blue-700 text-sm">
+                          {(() => {
+                            const selectedProduct = products.find(p => p.id === formData.product_chosen);
+                            return selectedProduct ? `${selectedProduct.name} - ₹${selectedProduct.salePrice || selectedProduct.basePrice || selectedProduct.price || selectedProduct.selling_price || 0}` : 'Product details loading...';
+                          })()}
+                        </div>
+                      </div>
+                    )}
+                    {errors.product_chosen && touched.product_chosen && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.product_chosen}
+                      </div>
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Product Price (₹)</Label>
+                    <Input
+                      type="number"
+                      value={formData.product_price || ''}
+                      onChange={(e) => handleFieldChange('product_price', e.target.value)}
+                      onBlur={() => handleFieldBlur('product_price')}
+                      placeholder="Auto-filled from product selection"
+                      readOnly
+                      className={cn(
+                        "bg-gray-50",
+                        errors.product_price && touched.product_price && "border-red-500 focus:ring-red-500"
+                      )}
+                    />
+                    <div className="text-xs text-gray-500">
+                      Price is automatically filled when product is selected
+                    </div>
+                    {errors.product_price && touched.product_price && (
+                      <div className="flex items-center gap-2 text-sm text-red-500">
+                        <AlertCircle className="h-4 w-4" />
+                        {errors.product_price}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Purchase Details */}
+              <div className="border rounded-lg p-4">
+                <div className="font-semibold mb-4">Purchase Details</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <SimpleDropdown
                     value={formData.main_category}
@@ -1131,106 +1273,7 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                     )}
                   </div>
                   <div className="space-y-2">
-                    <Label>Wants More Discount</Label>
-                    <Select 
-                      value={formData.wants_more_discount ? 'yes' : 'no'} 
-                      onValueChange={(value) => handleBooleanFieldChange('wants_more_discount', value === 'yes')}
-                    >
-                      <SelectTrigger className={cn(
-                        errors.wants_more_discount && touched.wants_more_discount && "border-red-500 focus:ring-red-500"
-                      )}>
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {formData.wants_more_discount && (
-                      <div className="bg-orange-50 border border-orange-200 rounded-md p-3">
-                        <div className="text-orange-800 font-medium">Discount Requested</div>
-                        <div className="text-orange-700 text-sm">Customer is asking for additional discount. Consider negotiation strategies.</div>
-                      </div>
-                    )}
-                    {errors.wants_more_discount && touched.wants_more_discount && (
-                      <div className="flex items-center gap-2 text-sm text-red-500">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.wants_more_discount}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Checking Other Jewellers</Label>
-                    <Select 
-                      value={formData.checking_other_jewellers ? 'yes' : 'no'} 
-                      onValueChange={(value) => handleBooleanFieldChange('checking_other_jewellers', value === 'yes')}
-                    >
-                      <SelectTrigger className={cn(
-                        errors.checking_other_jewellers && touched.checking_other_jewellers && "border-red-500 focus:ring-red-500"
-                      )}>
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {formData.checking_other_jewellers && (
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-md p-3">
-                        <div className="text-yellow-800 font-medium">Competition Check</div>
-                        <div className="text-yellow-700 text-sm">Customer is comparing with other jewellers. Focus on unique value propositions.</div>
-                      </div>
-                    )}
-                    {errors.checking_other_jewellers && touched.checking_other_jewellers && (
-                      <div className="flex items-center gap-2 text-sm text-red-500">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.checking_other_jewellers}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Felt Less Variety</Label>
-                    <Select 
-                      value={formData.felt_less_variety ? 'yes' : 'no'} 
-                      onValueChange={(value) => handleBooleanFieldChange('felt_less_variety', value === 'yes')}
-                    >
-                      <SelectTrigger className={cn(
-                        errors.felt_less_variety && touched.felt_less_variety && "border-red-500 focus:ring-red-500"
-                      )}>
-                        <SelectValue placeholder="Select" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="yes">Yes</SelectItem>
-                        <SelectItem value="no">No</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    {formData.felt_less_variety && (
-                      <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
-                        <div className="text-blue-800 font-medium">Variety Concern</div>
-                        <div className="text-blue-700 text-sm">Customer feels limited variety. Show more options or suggest custom designs.</div>
-                      </div>
-                    )}
-                    {errors.felt_less_variety && touched.felt_less_variety && (
-                      <div className="flex items-center gap-2 text-sm text-red-500">
-                        <AlertCircle className="h-4 w-4" />
-                        {errors.felt_less_variety}
-                      </div>
-                    )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Other Preferences (if any)</Label>
-                    <Textarea 
-                      rows={2} 
-                      value={formData.other_preferences} 
-                      onChange={(e) => handleFieldChange('other_preferences', e.target.value)} 
-                      placeholder="Specify other preferences" 
-                    />
-                    <div className="text-xs text-gray-500 text-right">
-                      {formData.other_preferences.length}/200 characters
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Actual Purchase Amount (₹)</Label>
+                    <Label className="after:content-['*'] after:ml-0.5 after:text-red-500">Purchase Amount (₹)</Label>
                     <Input 
                       type="number" 
                       value={formData.actual_purchase_amount} 
@@ -1243,26 +1286,23 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                         <div className="text-green-700 text-sm">This will be counted as realized revenue.</div>
                       </div>
                     )}
-                    <div className="text-xs text-gray-500 text-right">
-                      {formData.actual_purchase_amount.length}/10 characters
-                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Follow-up & Summary */}
+              {/* Follow-up */}
               <div className="border rounded-lg p-4">
-                <div className="font-semibold mb-4">Follow-up & Summary</div>
+                <div className="font-semibold mb-4">Follow-up</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="next_follow_up">Next Follow-up Date</Label>
                     <Input
                       id="next_follow_up"
-                    type="date"
+                      type="date"
                       value={formData.next_follow_up || ''}
                       onChange={(e) => handleFieldChange('next_follow_up', e.target.value)}
                       onBlur={() => handleFieldBlur('next_follow_up')}
-                  />
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label>Priority</Label>
@@ -1289,23 +1329,6 @@ export default function AddCustomerModal({ isOpen, onClose, onSuccess }: AddCust
                         {errors.priority}
                       </div>
                     )}
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Summary Notes</Label>
-                  <div className="space-y-2">
-                    <Label htmlFor="summary_notes">Summary Notes</Label>
-                    <Textarea 
-                      id="summary_notes"
-                      rows={3} 
-                      value={formData.summary_notes} 
-                      onChange={(e) => handleFieldChange('summary_notes', e.target.value)} 
-                      onBlur={() => handleFieldBlur('summary_notes')}
-                      placeholder="Key discussion points, items shown, next steps..." 
-                    />
-                  </div>
-                    <div className="text-xs text-gray-500 text-right">
-                      {formData.summary_notes.length}/500 characters
-                    </div>
                   </div>
                 </div>
               </div>

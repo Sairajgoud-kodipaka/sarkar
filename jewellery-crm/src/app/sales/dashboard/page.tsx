@@ -40,11 +40,9 @@ export default function SalesDashboardPage() {
     const fetchDashboardData = async () => {
       try {
         setLoading(true);
-        console.log('Starting to fetch dashboard data...');
         
         // Fetch sales dashboard data (includes sales + closed won pipeline)
         const dashboardResponse = await apiService.getSalesDashboard();
-        console.log('Sales Dashboard API response:', dashboardResponse);
         
         if (dashboardResponse.success && dashboardResponse.data) {
           const dashboardData = dashboardResponse.data;
@@ -58,14 +56,12 @@ export default function SalesDashboardPage() {
             pendingOrders: 0, // This would need to be calculated separately if needed
           });
           
-          console.log('Dashboard stats set:', dashboardData);
         } else {
           console.error('Failed to fetch dashboard data:', dashboardResponse);
         }
         
         // Fetch recent activities (appointments)
         const appointmentsResponse = await apiService.getAppointments();
-        console.log('Appointments API response:', appointmentsResponse);
         
         // Handle different response structures
         let appointments: any[] = [];
@@ -80,8 +76,6 @@ export default function SalesDashboardPage() {
             appointments = [appointmentsResponse.data];
           }
         }
-        console.log('Processed appointments data:', appointments);
-        console.log('Appointments count:', appointments.length);
 
         // Prepare recent activities
         const activities: RecentActivity[] = [];
@@ -121,8 +115,6 @@ export default function SalesDashboardPage() {
           console.error('Error fetching top products:', error);
           setTopProducts([]);
         }
-
-        console.log('Dashboard data fetch completed successfully');
 
       } catch (error: any) {
         console.error('Error fetching dashboard data:', error);

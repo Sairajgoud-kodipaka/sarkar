@@ -67,15 +67,40 @@ export default function ImportModal({ isOpen, onClose, onSuccess }: ImportModalP
   };
 
   const downloadTemplate = () => {
-    const csvContent = `name,sku,description,category,brand,cost_price,selling_price,discount_price,quantity,min_quantity,max_quantity,weight,dimensions,material,color,size,status,is_featured,is_bestseller
-Gold Ring,GOLD001,Beautiful gold ring,Rings,GoldBrand,5000,8000,7500,10,2,50,5.2,10x5x2 cm,Gold,Yellow,18K,active,true,false
-Silver Necklace,SILVER001,Elegant silver necklace,Necklaces,SilverBrand,3000,5000,4500,15,3,100,8.5,15x8x1 cm,Silver,White,925,active,false,true`;
-    
+    const headers = [
+      'name',
+      'sku',
+      'type',
+      'category',
+      'price',
+      'description',
+      'stock_quantity',
+      'status',
+      'image_url',
+      'main_image_url',
+      'additional_images_urls'
+    ];
+
+    const sampleData = [
+      'Gold Ring',
+      'GR-001',
+      'Ring',
+      'Gold Jewellery',
+      '15000.00',
+      'Beautiful 22K gold ring with traditional design',
+      '10',
+      'active',
+      'https://example.com/image1.jpg',
+      'https://example.com/main-image.jpg',
+      'https://example.com/img1.jpg|https://example.com/img2.jpg'
+    ];
+
+    const csvContent = headers.join(',') + '\n' + sampleData.join(',');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'products_template.csv';
+    a.download = 'products_import_template.csv';
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);

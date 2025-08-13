@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Filter, MoreHorizontal, Package, Tag, TrendingUp, Eye, Edit, Trash2, X, Store, Globe } from 'lucide-react';
+import { Search, Plus, Filter, MoreHorizontal, Package, Tag, TrendingUp, Eye, Edit, Trash2, X, Store, Globe, Upload, Download } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 import { 
   DropdownMenu,
@@ -17,10 +17,11 @@ import {
 import AddProductModal from '@/components/products/AddProductModal';
 import CategoriesModal from '@/components/products/CategoriesModal';
 import ImportModal from '@/components/products/ImportModal';
+import ExportModal from '@/components/products/ExportModal';
 import ProductActionsModal from '@/components/products/ProductActionsModal';
 import ScopeIndicator from '@/components/ui/ScopeIndicator';
 import { useScopedVisibility } from '@/lib/scoped-visibility';
-import { getProductImageUrl, getProductEmoji } from '@/lib/utils';
+import { getProductImage, getProductEmoji } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { DataTable, Column } from '@/components/tables/DataTable';
 
@@ -87,6 +88,7 @@ export default function ProductsPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isCategoriesModalOpen, setIsCategoriesModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
   const [isActionsModalOpen, setIsActionsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedAction, setSelectedAction] = useState<'view' | 'edit' | 'delete' | null>(null);
@@ -148,13 +150,10 @@ export default function ProductsPage() {
         }
         
         setProducts(productsData);
-        console.log(`Loaded ${productsData.length} products`);
       } else {
-        console.warn('Products response is not valid:', response.data);
         setProducts([]);
       }
     } catch (error) {
-      console.error('Error fetching products:', error);
       setProducts([]);
     } finally {
       setLoading(false);
@@ -182,7 +181,6 @@ export default function ProductsPage() {
         setCategories(categoriesData);
       }
     } catch (error) {
-      console.error('Error fetching categories:', error);
       setCategories([]);
     }
   };
@@ -194,7 +192,7 @@ export default function ProductsPage() {
         setGlobalCatalogue(response.data);
       }
     } catch (error) {
-      console.error('Error fetching global catalogue:', error);
+      // console.error('Error fetching global catalogue:', error);
     }
   };
 
@@ -231,7 +229,6 @@ export default function ProductsPage() {
   };
 
   const handleProductAction = (product: Product, action: 'view' | 'edit' | 'delete') => {
-    console.log('handleProductAction called:', { product: product.name, action });
     setSelectedProduct(product);
     setSelectedAction(action);
     setIsActionsModalOpen(true);
@@ -319,17 +316,32 @@ export default function ProductsPage() {
             Categories
           </Button>
           <Button onClick={() => {
-            console.log('Add Product button clicked, setting isAddModalOpen to true');
             setIsAddModalOpen(true);
           }}>
             <Plus className="w-4 h-4 mr-2" />
             Add Product
           </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsImportModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4" />
+            Import
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setIsExportModalOpen(true)}
+            className="flex items-center gap-2"
+          >
+            <Download className="w-4 h-4" />
+            Export
+          </Button>
         </div>
       </div>
 
       {/* Helpful Message for Products Without Images */}
-      {products.length > 0 && products.filter(p => !getProductImageUrl(p)).length > 0 && (
+      {products.length > 0 && products.filter(p => !getProductImage(p)).length > 0 && (
         <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
           <div className="flex items-start gap-3">
             <div className="text-blue-600 mt-0.5">
@@ -338,7 +350,7 @@ export default function ProductsPage() {
             <div>
               <h3 className="font-medium text-blue-900">Add Product Images</h3>
               <p className="text-sm text-blue-700 mt-1">
-                {products.filter(p => !getProductImageUrl(p)).length} of your {products.length} products don't have images. 
+                {products.filter(p => !getProductImage(p)).length} of your {products.length} products don't have images. 
                 Click "Add Product" to create new products with images, or edit existing products to add images.
               </p>
             </div>
@@ -464,7 +476,7 @@ export default function ProductsPage() {
               searchable={false}
               columns={([
                 { key: 'name', title: 'Name', sortable: true, render: (_v, row) => {
-                  const url = getProductImageUrl(row as any);
+                  const url = getProductImage(row as any);
                   const emoji = getProductEmoji(row as any);
                   return (
                     <div className="flex items-center gap-3">
@@ -520,7 +532,7 @@ export default function ProductsPage() {
             <Card key={product.id} className="overflow-hidden">
               <div className="relative">
                 {(() => {
-                  const imageUrl = getProductImageUrl(product);
+                  const imageUrl = getProductImage(product);
                   const productEmoji = getProductEmoji(product);
                   
                   return imageUrl && imageUrl !== '' ? (
@@ -628,7 +640,7 @@ export default function ProductsPage() {
                       {product.is_bestseller && (
                         <Badge variant="secondary" className="text-xs">Best Seller</Badge>
                       )}
-                      {!getProductImageUrl(product) && (
+                      {!getProductImage(product) && (
                         <Badge variant="outline" className="text-xs text-orange-600">No Image</Badge>
                       )}
                     </div>
@@ -686,7 +698,6 @@ export default function ProductsPage() {
       <AddProductModal 
         isOpen={isAddModalOpen}
         onClose={() => {
-          console.log('AddProductModal onClose called, setting isAddModalOpen to false');
           setIsAddModalOpen(false);
         }}
         onSuccess={handleAddProductSuccess} 
@@ -707,6 +718,14 @@ export default function ProductsPage() {
         onSuccess={() => {
           setIsImportModalOpen(false);
           fetchProducts();
+        }}
+      />
+
+      <ExportModal
+        isOpen={isExportModalOpen}
+        onClose={() => setIsExportModalOpen(false)}
+        onSuccess={() => {
+          setIsExportModalOpen(false);
         }}
       />
       

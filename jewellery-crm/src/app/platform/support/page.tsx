@@ -77,18 +77,13 @@ export default function PlatformSupportTicketsPage() {
         status: statusFilter === 'all' ? undefined : statusFilter || undefined,
       });
       
-      console.log('API Response:', response);
-      
       if (response.success && response.data) {
         const ticketsData = Array.isArray(response.data) ? response.data : (response.data as any).results || [];
-        console.log('Tickets data:', ticketsData);
         setTickets(ticketsData);
       } else {
-        console.log('No tickets data, setting empty array');
         setTickets([]);
       }
     } catch (err) {
-      console.error('Failed to fetch tickets:', err);
       setError('Failed to load support tickets');
     } finally {
       setLoading(false);
@@ -101,18 +96,15 @@ export default function PlatformSupportTicketsPage() {
     }
     
     if (!isAuthenticated) {
-      console.log('User not authenticated, redirecting to login');
       router.push('/login');
       return;
     }
     
     if (user?.role !== 'platform_admin') {
-      console.log('User is not platform admin, redirecting');
       router.push('/select-role');
       return;
     }
     
-    console.log('Platform admin authenticated, fetching tickets:', { user, isAuthenticated });
     fetchTickets();
   }, [searchTerm, statusFilter, priorityFilter, isAuthenticated, user, router, isHydrated]);
 

@@ -73,11 +73,8 @@ export default function TeamSettingsPage() {
     try {
       setLoading(true);
       const teamMembersData = await apiService.getTeamMembers();
-      console.log('Team members data:', teamMembersData);
-      console.log('Team members data:', teamMembersData.map((m: any) => ({ id: m.id, name: m.name, role: m.role })));
       setTeamMembers(teamMembersData);
     } catch (error) {
-      console.error('Failed to fetch team members:', error);
       setError('Failed to load team members');
       setTeamMembers([]);
     } finally {
@@ -87,23 +84,15 @@ export default function TeamSettingsPage() {
 
   const fetchStores = async () => {
     try {
-      console.log('Fetching stores...');
       const response = await apiService.getStores();
-      console.log('Stores response:', response);
       if (response.success) {
         // Handle paginated response format
         const storesData = (response.data as any)?.results || (Array.isArray(response.data) ? response.data : []);
-        console.log('Stores data:', storesData);
-        console.log('Stores count:', storesData.length);
-        console.log('Stores names:', storesData.map((s: any) => s.name));
-        console.log('Stores IDs:', storesData.map((s: any) => s.id));
         setStores(storesData);
       } else {
-        console.error('Failed to fetch stores:', response.message);
         setStores([]);
       }
     } catch (error) {
-      console.error('Failed to fetch stores:', error);
       setStores([]);
     }
   };
@@ -143,7 +132,6 @@ export default function TeamSettingsPage() {
         setError(response.message || 'Failed to create team member');
       }
     } catch (error) {
-      console.error('Failed to create team member:', error);
       setError('Failed to create team member');
     } finally {
       setCreatingMember(false);
@@ -184,12 +172,7 @@ export default function TeamSettingsPage() {
         store: editingMember.store
       };
 
-      console.log('Updating team member with data:', updateData);
-      console.log('Team member ID:', editingMember.id);
-
       const response = await apiService.updateTeamMember(editingMember.id.toString(), updateData);
-      
-      console.log('Update response:', response);
       
       if (response.success) {
         setShowEditModal(false);
@@ -200,7 +183,6 @@ export default function TeamSettingsPage() {
         setError(response.message || 'Failed to update team member');
       }
     } catch (error) {
-      console.error('Failed to update team member:', error);
       setError('Failed to update team member');
     } finally {
       setCreatingMember(false);
@@ -233,7 +215,6 @@ export default function TeamSettingsPage() {
         setError(response.message || 'Failed to delete team member');
       }
     } catch (error) {
-      console.error('Failed to delete team member:', error);
       setError('Failed to delete team member');
     } finally {
       setDeletingMember(null);
@@ -427,12 +408,9 @@ export default function TeamSettingsPage() {
                      {!Array.isArray(stores) || stores.length === 0 ? (
                        <SelectItem value="loading" disabled>Loading stores...</SelectItem>
                      ) : (
-                       stores.map(store => {
-                         console.log('Rendering store:', store);
-                         return (
-                           <SelectItem key={store.id} value={store.id.toString()}>{store.name}</SelectItem>
-                         );
-                       })
+                       stores.map(store => (
+                         <SelectItem key={store.id} value={store.id.toString()}>{store.name}</SelectItem>
+                       ))
                      )}
                    </SelectContent>
                  </Select>
@@ -643,8 +621,7 @@ export default function TeamSettingsPage() {
                         }
                         const store = stores.find(s => s.id === member.store);
                         if (!store) {
-                          console.log(`Store not found for ID: ${member.store}, available stores:`, stores.map(s => ({ id: s.id, name: s.name })));
-                          return 'Unknown Store';
+                                  return 'Unknown Store';
                         }
                         return store.name;
                       })()}

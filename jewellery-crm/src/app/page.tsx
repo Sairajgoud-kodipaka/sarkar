@@ -12,29 +12,24 @@ export default function HomePage() {
   const hasRedirected = useRef(false);
 
   useEffect(() => {
-    if (isHydrated && !isLoading && !hasRedirected.current) {
+    if (user && !hasRedirected.current) {
       hasRedirected.current = true;
       
-      if (user) {
-        // User is authenticated, redirect based on role
-        const userRole = user.user_metadata?.role;
-        const roleRoutes: Record<string, string> = {
-          business_admin: '/business-admin/dashboard',
-          sales_associate: '/sales/dashboard',
-          floor_manager: '/floor-manager/dashboard',
-          inhouse_sales: '/sales/dashboard',
-        };
-        
-        const route = roleRoutes[userRole] || '/login';
-        console.log('🏠 Home page: User authenticated, redirecting to:', route);
-        router.replace(route);
+      // Get user role and redirect accordingly
+      const userRole = user.user_metadata?.role || 'user';
+      
+      // Redirect to role-based route
+      if (userRole === 'business_admin') {
+        router.push('/business-admin/dashboard');
+      } else if (userRole === 'floor_manager') {
+        router.push('/floor-manager/dashboard');
+      } else if (userRole === 'sales') {
+        router.push('/sales/dashboard');
       } else {
-        // No user, redirect to login
-        console.log('🏠 Home page: No user, redirecting to login');
-        router.replace('/login');
+        router.push('/platform/dashboard');
       }
     }
-  }, [user, isLoading, isHydrated, router]);
+  }, [user, router]);
 
   // Show loading while checking auth
   if (isLoading || !isHydrated) {

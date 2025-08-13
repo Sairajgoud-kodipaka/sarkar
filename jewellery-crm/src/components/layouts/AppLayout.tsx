@@ -40,9 +40,6 @@ export function AppLayout({ children, className }: AppLayoutProps) {
   const isMobile = useMediaQuery('(max-width: 1023px)');
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
-  // Debug logging
-  console.log('AppLayout - isMobile:', isMobile, 'sidebarOpen:', sidebarOpen);
-
   // Close sidebar when route changes on mobile
   useEffect(() => {
     if (isMobile) {
@@ -73,7 +70,6 @@ export function AppLayout({ children, className }: AppLayoutProps) {
   }, [isMobile, sidebarOpen]);
 
   const handleSidebarToggle = () => {
-    console.log('Sidebar toggle clicked - current state:', sidebarOpen);
     setSidebarOpen(!sidebarOpen);
   };
 

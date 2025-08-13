@@ -59,12 +59,10 @@ export default function SupportTicketsPage() {
     }
     
     if (!isAuthenticated) {
-      console.log('User not authenticated, redirecting to login');
       router.push('/login');
       return;
     }
     
-    console.log('User authenticated:', { user, isAuthenticated });
     fetchTickets();
   }, [searchTerm, statusFilter, isAuthenticated, user, router, isHydrated]);
 
@@ -83,7 +81,6 @@ export default function SupportTicketsPage() {
         setError('Failed to load support tickets');
       }
     } catch (error) {
-      console.error('Failed to fetch support tickets:', error);
       setError('Failed to load support tickets');
       setTickets([]);
     } finally {
@@ -112,7 +109,6 @@ export default function SupportTicketsPage() {
         setError('Failed to create ticket');
       }
     } catch (error) {
-      console.error('Failed to create ticket:', error);
       setError('Failed to create ticket');
     } finally {
       setCreatingTicket(false);

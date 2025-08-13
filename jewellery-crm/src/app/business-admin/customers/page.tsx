@@ -58,6 +58,9 @@ export default function CustomersPage() {
   const [teamMembers, setTeamMembers] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
   const [selectedAssignee, setSelectedAssignee] = useState<string>('');
   const [isAddCustomerModalOpen, setIsAddCustomerModalOpen] = useState(false);
+  const [connectionStatus, setConnectionStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [connectionMessage, setConnectionMessage] = useState<string>('');
+  const [testingConnection, setTestingConnection] = useState(false);
 
   // Check if user can delete customers (managers and higher roles)
   const canDeleteCustomers = (() => {
@@ -68,57 +71,52 @@ export default function CustomersPage() {
   // Test function to check database connection
   const testDatabaseConnection = async () => {
     try {
-      console.log('Testing database connection...');
-      
-      // Test 1: Check if we can connect to Supabase
       const { data: testData, error: testError } = await supabase
         .from('customers')
         .select('count')
         .limit(1);
       
-      console.log('Database connection test:', { testData, testError });
-      
       if (testError) {
-        console.error('Database connection failed:', testError);
-        return false;
+        setConnectionStatus('error');
+        setConnectionMessage(`Connection failed: ${testError.message}`);
+      } else {
+        setConnectionStatus('success');
+        setConnectionMessage('Database connection successful!');
       }
-      
-      return true;
     } catch (error) {
-      console.error('Database connection test failed:', error);
-      return false;
+      setConnectionStatus('error');
+      setConnectionMessage('Connection failed: Unexpected error');
+    } finally {
+      setTestingConnection(false);
     }
   };
 
   useEffect(() => {
     fetchCustomers();
-  }, [currentPage, searchTerm, statusFilter]);
+  }, [currentPage, searchTerm, statusFilter, floorFilter]);
 
   const fetchCustomers = async () => {
     try {
       setLoading(true);
       setError(null);
       
-      console.log('Fetching customers with params:', {
-        search: searchTerm || undefined,
-        status: statusFilter === 'all' ? undefined : statusFilter,
-        floor: floorFilter === 'all' ? undefined : parseInt(floorFilter),
-      });
-      
-      // Use the getAllCustomers method for business admin
       const response = await apiService.getAllCustomers();
       
-      console.log('API Response:', response);
-      
       if (response && response.success && response.data) {
-        console.log('Customer data received:', response.data);
-        setCustomers(response.data as Customer[]);
+        let filteredCustomers = response.data as Customer[];
+        
+        // Apply floor filter
+        if (floorFilter !== 'all') {
+          filteredCustomers = filteredCustomers.filter(customer => 
+            customer.floor === parseInt(floorFilter)
+          );
+        }
+        
+        setCustomers(filteredCustomers);
       } else {
-        console.error('Invalid response structure:', response);
         setCustomers([]);
       }
     } catch (error) {
-      console.error('Failed to fetch customers:', error);
       setCustomers([]);
     } finally {
       setLoading(false);
@@ -276,7 +274,7 @@ export default function CustomersPage() {
       </div>
 
       {/* Stats Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="shadow-sm">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -335,6 +333,26 @@ export default function CustomersPage() {
             </div>
           </CardContent>
         </Card>
+        <Card className="shadow-sm">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-text-secondary">
+                  {floorFilter === 'all' ? 'All Floors' : `Floor ${floorFilter}`}
+                </p>
+                <p className="text-2xl font-bold text-text-primary">
+                  {floorFilter === 'all' 
+                    ? customers.length 
+                    : customers.filter(c => c.floor === parseInt(floorFilter)).length
+                  }
+                </p>
+              </div>
+              <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center">
+                <span className="text-indigo-600 text-sm font-semibold">🏢</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Search and Filters */}
@@ -360,10 +378,28 @@ export default function CustomersPage() {
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
-            <Button variant="outline" size="sm" className="flex items-center gap-2">
-              <Filter className="w-4 h-4" />
-              More Filters
-            </Button>
+            <Select value={floorFilter} onValueChange={(v: string) => setFloorFilter(v)}>
+              <SelectTrigger className="w-full md:w-48">
+                <SelectValue placeholder="Filter by floor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Floors</SelectItem>
+                <SelectItem value="1">Floor 1</SelectItem>
+                <SelectItem value="2">Floor 2</SelectItem>
+                <SelectItem value="3">Floor 3</SelectItem>
+              </SelectContent>
+            </Select>
+          
+            {floorFilter !== 'all' && (
+              <Button 
+                variant="outline" 
+                size="sm" 
+                onClick={() => setFloorFilter('all')}
+                className="flex items-center gap-2 text-blue-600 hover:text-blue-700"
+              >
+                <span className="text-xs">Clear Floor Filter</span>
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -391,7 +427,7 @@ export default function CustomersPage() {
                     <th className="text-left py-3 px-4 font-medium text-text-secondary">Name</th>
                     <th className="text-left py-3 px-4 font-medium text-text-secondary">Contact</th>
                     <th className="text-left py-3 px-4 font-medium text-text-secondary">Status</th>
-                    <th className="text-left py-3 px-4 font-medium text-text-secondary">Source</th>
+                    <th className="text-left py-3 px-4 font-medium text-text-secondary">Floor Info</th>
                     <th className="text-left py-3 px-4 font-medium text-text-secondary">Assigned To</th>
                     <th className="text-left py-3 px-4 font-medium text-text-secondary">Created</th>
                     <th className="text-left py-3 px-4 font-medium text-text-secondary">Actions</th>
@@ -403,6 +439,7 @@ export default function CustomersPage() {
                       <td className="py-3 px-4">
                         <div>
                           <div className="font-medium text-text-primary">{customer.name}</div>
+                          <div className="text-xs text-blue-600 font-medium">Floor {customer.floor}</div>
                         </div>
                       </td>
                       <td className="py-3 px-4">
@@ -420,7 +457,16 @@ export default function CustomersPage() {
                         </Badge>
                       </td>
                       <td className="py-3 px-4 text-text-secondary">
-                        {'N/A'}
+                        <div className="flex items-center space-x-2">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                            Floor {customer.floor}
+                          </span>
+                          {customer.visited_date && (
+                            <span className="text-xs text-gray-500">
+                              {new Date(customer.visited_date).toLocaleDateString()}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="py-3 px-4 text-text-secondary">
                         {customer.team_members 

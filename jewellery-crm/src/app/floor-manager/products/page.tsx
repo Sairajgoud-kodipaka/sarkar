@@ -20,7 +20,7 @@ import ImportModal from '@/components/products/ImportModal';
 import ProductActionsModal from '@/components/products/ProductActionsModal';
 import ScopeIndicator from '@/components/ui/ScopeIndicator';
 import { useScopedVisibility } from '@/lib/scoped-visibility';
-import { getProductImageUrl, getProductEmoji } from '@/lib/utils';
+import { getProductImage, getProductEmoji } from '@/lib/utils';
 
 interface Product {
   id: number;
@@ -139,13 +139,10 @@ export default function FloorManagerProductsPage() {
         }
         
         setProducts(productsData);
-        console.log(`Loaded ${productsData.length} products`);
       } else {
-        console.warn('Products response is not valid:', response.data);
         setProducts([]);
       }
     } catch (error) {
-      console.error('Error fetching products:', error);
       setProducts([]);
     } finally {
       setLoading(false);
@@ -162,7 +159,6 @@ export default function FloorManagerProductsPage() {
         setCategories(response.data);
       }
     } catch (error) {
-      console.error('Error fetching categories:', error);
       setCategories([]);
     }
   };
@@ -196,7 +192,6 @@ export default function FloorManagerProductsPage() {
         setShowGlobalCatalogue(true);
       }
     } catch (error) {
-      console.error('Error fetching global catalogue:', error);
     }
   };
 
@@ -386,10 +381,10 @@ export default function FloorManagerProductsPage() {
             <div className="aspect-square relative bg-gray-100">
               {product.image_url ? (
                 <img
-                  src={getProductImageUrl(product.image_url)}
+                  src={getProductImage(product.image_url)}
                   alt={product.name}
                   className="w-full h-full object-cover cursor-pointer"
-                  onClick={() => handleImageClick(getProductImageUrl(product.image_url!))}
+                  onClick={() => handleImageClick(getProductImage(product.image_url!))}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-6xl">

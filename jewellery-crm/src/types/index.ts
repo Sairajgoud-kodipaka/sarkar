@@ -842,6 +842,53 @@ export interface TeamMember {
 }
 
 // ================================
+// AUDIT LOG TYPES
+// ================================
+
+/**
+ * Audit log entry for tracking all system changes
+ */
+export interface AuditLog {
+  id: number;
+  table_name: string;
+  record_id: number;
+  action: 'create' | 'update' | 'delete' | 'restore' | 'login' | 'logout' | 'export' | 'import';
+  old_values?: Record<string, any>;
+  new_values?: Record<string, any>;
+  user_id?: string;
+  user_email?: string;
+  ip_address?: string;
+  user_agent?: string;
+  additional_context?: Record<string, any>;
+  created_at: string;
+}
+
+/**
+ * Audit log filter options for querying
+ */
+export interface AuditLogFilters {
+  table_name?: string;
+  action?: string;
+  user_id?: string;
+  date_from?: string;
+  date_to?: string;
+  record_id?: number;
+  limit?: number;
+  offset?: number;
+}
+
+/**
+ * Audit log summary statistics
+ */
+export interface AuditLogSummary {
+  total_actions: number;
+  actions_by_type: Record<string, number>;
+  actions_by_user: Record<string, number>;
+  actions_by_table: Record<string, number>;
+  recent_activity: AuditLog[];
+}
+
+// ================================
 // ADDITIONAL TYPES FOR COMPONENT COMPATIBILITY
 // ================================
 
@@ -900,16 +947,32 @@ export interface FloorData {
  * Dashboard data interface
  */
 export interface DashboardData {
-  visitors: {
+  // New visitors (people entering the store)
+  new_visitors: {
     today: number;
     this_week: number;
     this_month: number;
   };
+  
+  // Sales data
   sales: {
     today: number;
     this_week: number;
     this_month: number;
   };
+  
+  // Current floor occupancy (active customers right now)
+  current_floor_occupancy: {
+    floor_1: number;
+    floor_2: number;
+    floor_3: number;
+    total_active: number;
+  };
+  
+  // Total customers in the system
+  total_customers: number;
+  
+  // Floor customer details (for expandable view)
   floor_customers: Array<{
     floor: number;
     customers: Array<{

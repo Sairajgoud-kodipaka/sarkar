@@ -85,9 +85,6 @@ export default function TicketDetailPage() {
         apiService.getTicketMessages(ticketId)
       ]);
       
-      console.log('Ticket Response:', ticketResponse);
-      console.log('Messages Response:', messagesResponse);
-      
       if (ticketResponse.success && ticketResponse.data) {
         setTicket(ticketResponse.data);
       } else {
@@ -98,17 +95,11 @@ export default function TicketDetailPage() {
       // Ensure messages is always an array
       if (messagesResponse.success && messagesResponse.data) {
         const messagesData = Array.isArray(messagesResponse.data) ? messagesResponse.data : (messagesResponse.data as any).results || [];
-        console.log('Messages data:', messagesData);
-        console.log('First message structure:', messagesData[0]);
-        console.log('Message sender_name:', messagesData[0]?.sender_name);
-        console.log('Message sender_role:', messagesData[0]?.sender_role);
         setMessages(messagesData);
       } else {
-        console.log('No messages data, setting empty array');
         setMessages([]);
       }
     } catch (error) {
-      console.error('Failed to fetch ticket details:', error);
       setError('Failed to load ticket details');
     } finally {
       setLoading(false);
@@ -116,34 +107,27 @@ export default function TicketDetailPage() {
   }, [ticketId]);
 
   useEffect(() => {
-    if (!isAuthenticated) {
-      console.log('User not authenticated, redirecting to login');
+    if (!user) {
       router.push('/login');
       return;
     }
     
-    if (ticketId) {
-      console.log('User authenticated, fetching ticket details:', { user, isAuthenticated });
-      fetchTicketDetails();
-    }
-  }, [ticketId, isAuthenticated, user, router, fetchTicketDetails]);
+    fetchTicketDetails();
+  }, [user, router]);
 
   const handleSendMessage = async () => {
-    if (!newMessage.trim()) return;
-    
+    if (!newMessage.trim() || !user) return;
+
     try {
       setSendingMessage(true);
-      
-      // Debug: Log user object to see its structure
-      console.log('User object for sender_id:', user);
-      console.log('User ID:', user?.id);
-      
-      const response = await apiService.createTicketMessage(ticketId, {
-        content: newMessage,
-        sender_id: user?.id, // Add sender_id from current user
-        is_internal: false,
-        message_type: 'text'
-      });
+      const messageData = {
+        ticket_id: ticketId,
+        message: newMessage.trim(),
+        sender_id: user.id,
+        is_internal: false
+      };
+
+      const response = await apiService.createTicketMessage(ticketId, messageData);
       
       if (response.success) {
         setNewMessage('');
@@ -157,7 +141,6 @@ export default function TicketDetailPage() {
         setError('Failed to send message');
       }
     } catch (error) {
-      console.error('Failed to send message:', error);
       setError('Failed to send message');
     } finally {
       setSendingMessage(false);

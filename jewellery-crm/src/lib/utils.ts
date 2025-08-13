@@ -9,49 +9,24 @@ export function cn(...inputs: ClassValue[]) {
  * Get the display image URL for a product
  * Only returns actual uploaded images from Supabase, no placeholders
  */
-export function getProductImageUrl(product: any): string {
-  // Defensive: if a string URL is passed instead of an object, just return it
-  if (typeof product === 'string') {
-    return product;
-  }
-  // Only log once per product to avoid spam
-  if (!product.image && !product.image_url && !product.main_image_url) {
-    // Use a simple flag to avoid repeated logging
-    if (product && typeof product === 'object' && !product._loggedNoImage) {
-      console.log('🔍 No image found for product:', {
-        id: product.id,
-        name: product.name,
-        category: product.category
-      });
-      // Guard against readonly/primitive
-      try {
-        (product as any)._loggedNoImage = true;
-      } catch {
-        // ignore
-      }
-    }
-  }
-
-  // Check for uploaded image first (current uploads go to image field)
-  if (product.image && product.image.startsWith('http')) {
-    console.log('✅ Using uploaded image:', product.image);
+export function getProductImage(product: any): string {
+  // Check if product has an uploaded image
+  if (product.image && product.image !== 'null' && product.image !== '') {
     return product.image;
   }
-  
-  // Check for main_image_url (for future compatibility)
-  if (product.main_image_url && product.main_image_url.startsWith('http')) {
-    console.log('✅ Using main_image_url:', product.main_image_url);
+
+  // Check if product has a main image URL
+  if (product.main_image_url && product.main_image_url !== 'null' && product.main_image_url !== '') {
     return product.main_image_url;
   }
-  
-  // Check for image_url (legacy database structure)
-  if (product.image_url && product.image_url.startsWith('http')) {
-    console.log('✅ Using image_url:', product.image_url);
+
+  // Check if product has a fallback image URL
+  if (product.image_url && product.image_url !== 'null' && product.image_url !== '') {
     return product.image_url;
   }
-  
-      // No image found - return empty string (no placeholder)
-    return '';
+
+  // Return default image if no image is available
+  return '/placeholder-product.jpg';
 }
 
 /**
@@ -89,10 +64,4 @@ export function formatPrice(price: number): string {
   }).format(price);
 }
 
-/**
- * Get discount percentage
- */
-export function getDiscountPercentage(originalPrice: number, discountedPrice: number): number {
-  if (!originalPrice || !discountedPrice) return 0;
-  return Math.round(((originalPrice - discountedPrice) / originalPrice) * 100);
-}
+// Removed e-commerce discount functionality for MVP

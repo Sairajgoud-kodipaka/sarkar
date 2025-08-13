@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Upload, Download, X, FileText, AlertCircle } from 'lucide-react';
+import { Upload, Download, X, FileText, AlertCircle, Eye } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 
 interface ImportModalProps {
@@ -13,23 +13,60 @@ interface ImportModalProps {
   onSuccess: () => void;
 }
 
+interface ParsedCustomer {
+  name: string;
+  phone: string;
+  interest: string;
+  floor: number;
+  visited_date: string;
+  status: string;
+  notes?: string;
+  assigned_to?: string; // Add missing assigned_to field
+  email?: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  country?: string;
+  postal_code?: string;
+  date_of_birth?: string;
+  anniversary_date?: string;
+  preferred_metal?: string;
+  preferred_stone?: string;
+  budget_range?: string;
+  customer_type?: string;
+  lead_source?: string;
+  community?: string;
+  mother_tongue?: string;
+  reason_for_visit?: string;
+  age_of_end_user?: string;
+  saving_scheme?: string;
+  catchment_area?: string;
+  next_follow_up?: string;
+  summary_notes?: string;
+  ring_size?: string;
+  customer_interests?: string;
+}
+
 export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [parsedData, setParsedData] = useState<ParsedCustomer[]>([]);
+  const [showPreview, setShowPreview] = useState(false);
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   const downloadTemplate = () => {
     const headers = [
-      'first_name',
-      'last_name',
-      'email',
+      'name',
       'phone',
+      'interest',
+      'floor',
+      'visited_date',
       'status',
-      'lead_source',
-      'preferred_metal',
-      'budget_range',
-      'customer_type',
+      'notes',
+      'assigned_to', // Add missing assigned_to field
+      'email',
       'address',
       'city',
       'state',
@@ -37,9 +74,6 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
       'postal_code',
       'date_of_birth',
       'anniversary_date',
-      'preferred_stone',
-      'ring_size',
-      'notes',
       'community',
       'mother_tongue',
       'reason_for_visit',
@@ -48,6 +82,7 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
       'catchment_area',
       'next_follow_up',
       'summary_notes',
+      'ring_size',
       'customer_interests'
     ];
 
@@ -63,12 +98,127 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
     window.URL.revokeObjectURL(url);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const parseCSV = (file: File): Promise<ParsedCustomer[]> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const csv = e.target?.result as string;
+          const lines = csv.split('\n').filter(line => line.trim());
+          const headers = lines[0].split(',').map(h => h.trim());
+          
+          const data: ParsedCustomer[] = [];
+          const errors: string[] = [];
+          
+          for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            const values = line.split(',').map(v => v.trim());
+            
+            if (values.length < headers.length) {
+              errors.push(`Line ${i + 1}: Insufficient columns`);
+              continue;
+            }
+            
+            const row: any = {};
+            headers.forEach((header, index) => {
+              let value = values[index] || '';
+              // Remove quotes if present
+              if (value.startsWith('"') && value.endsWith('"')) {
+                value = value.slice(1, -1);
+              }
+              row[header] = value;
+            });
+            
+            // Validate required fields
+            if (!row.name || !row.phone || !row.floor) {
+              errors.push(`Line ${i + 1}: Missing required fields (name, phone, floor)`);
+              continue;
+            }
+            
+            // Validate floor number
+            const floor = parseInt(row.floor);
+            if (isNaN(floor) || floor < 1 || floor > 10) {
+              errors.push(`Line ${i + 1}: Invalid floor number (must be 1-10)`);
+              continue;
+            }
+            
+            // Validate status
+            if (row.status && !['active', 'inactive', 'lead', 'prospect', 'customer', 'vip'].includes(row.status.toLowerCase())) {
+              errors.push(`Line ${i + 1}: Invalid status (must be active, inactive, lead, prospect, customer, or vip)`);
+              continue;
+            }
+            
+            // Parse dates
+            if (row.visited_date) {
+              const date = new Date(row.visited_date);
+              if (isNaN(date.getTime())) {
+                errors.push(`Line ${i + 1}: Invalid visited_date format (use YYYY-MM-DD)`);
+                continue;
+              }
+              row.visited_date = date.toISOString().split('T')[0];
+            }
+            
+            if (row.date_of_birth) {
+              const date = new Date(row.date_of_birth);
+              if (isNaN(date.getTime())) {
+                errors.push(`Line ${i + 1}: Invalid date_of_birth format (use YYYY-MM-DD)`);
+                continue;
+              }
+              row.date_of_birth = date.toISOString().split('T')[0];
+            }
+            
+            if (row.anniversary_date) {
+              const date = new Date(row.anniversary_date);
+              if (isNaN(date.getTime())) {
+                errors.push(`Line ${i + 1}: Invalid anniversary_date format (use YYYY-MM-DD)`);
+                continue;
+              }
+              row.anniversary_date = date.toISOString().split('T')[0];
+            }
+            
+            if (row.next_follow_up) {
+              const date = new Date(row.next_follow_up);
+              if (isNaN(date.getTime())) {
+                errors.push(`Line ${i + 1}: Invalid next_follow_up format (use YYYY-MM-DD)`);
+                continue;
+              }
+              row.next_follow_up = date.toISOString().split('T')[0];
+            }
+            
+            data.push(row as ParsedCustomer);
+          }
+          
+          if (errors.length > 0) {
+            setValidationErrors(errors);
+            reject(new Error(`Validation failed: ${errors.length} errors found`));
+            return;
+          }
+          
+          resolve(data);
+        } catch (error) {
+          reject(error);
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read file'));
+      reader.readAsText(file);
+    });
+  };
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
       if (selectedFile.type === 'text/csv' || selectedFile.name.endsWith('.csv')) {
         setFile(selectedFile);
         setError(null);
+        setValidationErrors([]);
+        setParsedData([]);
+        
+        try {
+          const data = await parseCSV(selectedFile);
+          setParsedData(data);
+        } catch (error: any) {
+          setError(error.message);
+        }
       } else {
         setError('Please select a valid CSV file');
         setFile(null);
@@ -77,8 +227,8 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
   };
 
   const handleUpload = async () => {
-    if (!file) {
-      setError('Please select a file to upload');
+    if (!file || parsedData.length === 0) {
+      setError('Please select a valid file to upload');
       return;
     }
 
@@ -86,10 +236,7 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
       setUploading(true);
       setError(null);
 
-      const formData = new FormData();
-      formData.append('file', file);
-
-      const response = await apiService.importCustomers(formData);
+      const response = await apiService.importCustomers(parsedData);
       
       if (response.success) {
         setSuccess(true);
@@ -98,6 +245,8 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
           onClose();
           setSuccess(false);
           setFile(null);
+          setParsedData([]);
+          setValidationErrors([]);
         }, 2000);
       } else {
         setError(response.message || 'Failed to import customers');
@@ -114,7 +263,7 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
 
   return (
     <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg p-6 w-full max-w-md mx-4">
+      <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold text-text-primary">Import Customers</h2>
           <Button
@@ -166,6 +315,65 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
                 </div>
               )}
 
+              {validationErrors.length > 0 && (
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                  <h4 className="font-medium text-yellow-800 mb-2">Validation Errors ({validationErrors.length})</h4>
+                  <div className="max-h-32 overflow-y-auto space-y-1">
+                    {validationErrors.map((error, index) => (
+                      <div key={index} className="text-sm text-yellow-700">• {error}</div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {parsedData.length > 0 && (
+                <div className="border rounded-lg p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="font-medium text-text-primary">Data Preview ({parsedData.length} customers)</h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowPreview(!showPreview)}
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      {showPreview ? 'Hide' : 'Show'} Preview
+                    </Button>
+                  </div>
+                  
+                  {showPreview && (
+                    <div className="max-h-48 overflow-y-auto">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50">
+                          <tr>
+                            <th className="text-left p-2">Name</th>
+                            <th className="text-left p-2">Phone</th>
+                            <th className="text-left p-2">Floor</th>
+                            <th className="text-left p-2">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {parsedData.slice(0, 10).map((customer, index) => (
+                            <tr key={index} className="border-b">
+                              <td className="p-2">{customer.name}</td>
+                              <td className="p-2">{customer.phone}</td>
+                              <td className="p-2">{customer.floor}</td>
+                              <td className="p-2">{customer.status || 'active'}</td>
+                            </tr>
+                          ))}
+                          {parsedData.length > 10 && (
+                            <tr>
+                              <td colSpan={4} className="p-2 text-center text-gray-500">
+                                ... and {parsedData.length - 10} more customers
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="border-t pt-4">
                 <Button
                   variant="outline"
@@ -189,18 +397,18 @@ export function ImportModal({ isOpen, onClose, onSuccess }: ImportModalProps) {
               </Button>
               <Button
                 onClick={handleUpload}
-                disabled={!file || uploading}
+                disabled={!file || parsedData.length === 0 || uploading || validationErrors.length > 0}
                 className="flex-1 flex items-center gap-2"
               >
                 {uploading ? (
                   <>
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    Uploading...
+                    Importing {parsedData.length} customers...
                   </>
                 ) : (
                   <>
                     <Upload className="w-4 h-4" />
-                    Import Customers
+                    Import {parsedData.length} Customers
                   </>
                 )}
               </Button>

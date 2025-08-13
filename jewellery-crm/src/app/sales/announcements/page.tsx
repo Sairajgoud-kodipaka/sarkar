@@ -198,7 +198,6 @@ export default function AnnouncementsPage() {
       // Temporary: just close the modal
       setShowReplyModal(false);
       setReplyToAnnouncement(null);
-      console.log('Reply functionality not yet implemented');
     } catch (error) {
       console.error('Error replying to announcement:', error);
     }

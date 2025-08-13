@@ -5,14 +5,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { apiService } from '@/lib/api-service';
 import { useAuth } from '@/hooks/useAuth';
-import { Loader2, X, Edit, Trash2, Eye, Copy, Archive } from 'lucide-react';
-import ImageUpload from './ImageUpload';
-import { uploadImage } from '@/lib/image-upload';
-import { getProductImageUrl } from '@/lib/utils';
+import { Loader2, X, Edit, Trash2, Eye, Copy, Archive, Upload } from 'lucide-react';
+import { uploadImage, validateImage } from '@/lib/image-upload';
 
 interface ProductActionsModalProps {
   isOpen: boolean;
@@ -47,6 +44,10 @@ interface ProductFormData {
   status: string;
   is_featured: boolean;
   is_bestseller: boolean;
+  type: string;
+  price: number;
+  stock_quantity: number;
+  image: string;
 }
 
 export default function ProductActionsModal({ 
@@ -57,9 +58,6 @@ export default function ProductActionsModal({
   action 
 }: ProductActionsModalProps) {
   const { user } = useAuth();
-  const MATERIAL_OPTIONS = ['Gold', 'Silver', 'Platinum', 'Diamond', 'Pearl'];
-  const COLOR_OPTIONS = ['Yellow', 'White', 'Rose', 'Two-tone'];
-  const KARAT_OPTIONS = ['14K', '18K', '22K', '24K'];
   const [categories, setCategories] = useState<Category[]>([]);
   const [formData, setFormData] = useState<ProductFormData>({
     name: '',
@@ -80,25 +78,19 @@ export default function ProductActionsModal({
     status: 'active',
     is_featured: false,
     is_bestseller: false,
+    type: 'Necklace',
+    price: 0,
+    stock_quantity: 0,
+    image: '',
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [mainImage, setMainImage] = useState<File | null>(null);
-  const [additionalImages, setAdditionalImages] = useState<File[]>([]);
-  const [mainImageUrl, setMainImageUrl] = useState<string | undefined>(undefined);
-  const [additionalImagesUrls, setAdditionalImagesUrls] = useState<string[]>([]);
-  const [selectedImage, setSelectedImage] = useState<string | null>(null);
-  const [imageModalOpen, setImageModalOpen] = useState(false);
-  // Select helpers for material/color/karat (size)
-  const getSelectValue = (val: string, opts: string[]) => {
-    if (!val || val.trim() === '') return 'custom';
-    const trimmedVal = val.trim();
-    return opts.includes(trimmedVal) ? trimmedVal : 'custom';
-  };
-  const [materialSelect, setMaterialSelect] = useState<string>('');
-  const [colorSelect, setColorSelect] = useState<string>('');
-  const [karatSelect, setKaratSelect] = useState<string>('');
   const [categorySelect, setCategorySelect] = useState<string>('');
+  
+  // Image upload state
+  const [uploading, setUploading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string>('');
 
   React.useEffect(() => {
     if (isOpen && product) {
@@ -123,17 +115,12 @@ export default function ProductActionsModal({
           status: product.status || 'active',
           is_featured: product.is_featured || false,
           is_bestseller: product.is_bestseller || false,
+          type: product.type || 'Necklace',
+          price: product.price || 0,
+          stock_quantity: product.stock_quantity || 0,
+          image: product.image_url || '',
         });
         
-        // Set image URLs for display
-        setMainImageUrl(getProductImageUrl(product));
-        setAdditionalImagesUrls(product.additional_images_urls || []);
-
-        // Initialize selects
-        setMaterialSelect(getSelectValue(product.material || '', MATERIAL_OPTIONS));
-        setColorSelect(getSelectValue(product.color || '', COLOR_OPTIONS));
-        setKaratSelect(getSelectValue(product.size || product.karat || '', KARAT_OPTIONS));
-
         // Initialize category select by matching name or id
         setTimeout(() => {
           const cat = (categories || []).find((c) =>
@@ -176,64 +163,19 @@ export default function ProductActionsModal({
     setError(null);
 
     try {
-      // Upload new main image first (if provided)
-      let uploadedMainUrl: string | undefined = undefined;
-      if (mainImage) {
-        const result = await uploadImage(mainImage);
-        if (result.error) {
-          throw new Error(`Image upload failed: ${result.error}`);
-        }
-        uploadedMainUrl = result.url;
-      }
-
-      // Upload additional images if provided
-      let uploadedAdditionalUrls: string[] = [];
-      if (additionalImages && additionalImages.length > 0) {
-        for (const file of additionalImages) {
-          const res = await uploadImage(file);
-          if (res.url) uploadedAdditionalUrls.push(res.url);
-        }
-      }
-
-      // Build updates object (plain JSON) for DB
+      // Build updates object matching the simplified form fields
       const updates: Record<string, any> = {
         name: formData.name,
         sku: formData.sku,
-        description: formData.description,
+        type: formData.type,
         category: formData.category,
-        cost_price: formData.cost_price,
-        selling_price: formData.selling_price,
-        discount_price: formData.discount_price || null,
-        quantity: formData.quantity,
-        min_quantity: formData.min_quantity,
-        max_quantity: formData.max_quantity,
-        weight: formData.weight,
-        dimensions: formData.dimensions,
-        material: formData.material,
-        color: formData.color,
-        size: formData.size,
+        price: parseFloat(formData.price.toString()) || 0,
+        description: formData.description,
+        stock_quantity: parseInt(formData.stock_quantity.toString()) || 0,
         status: formData.status,
-        is_featured: formData.is_featured,
-        is_bestseller: formData.is_bestseller,
+        image_url: formData.image || undefined,
+        updated_at: new Date().toISOString()
       };
-
-      // Persist image URL fields if uploaded
-      if (uploadedMainUrl) {
-        updates.image = uploadedMainUrl;
-        updates.image_url = uploadedMainUrl;
-        updates.main_image_url = uploadedMainUrl;
-      }
-      if (uploadedAdditionalUrls.length > 0) {
-        updates.additional_images_urls = uploadedAdditionalUrls;
-      }
-
-      // Preserve store assignment if your schema supports it (optional)
-      const userStore = (user as any)?.user_metadata?.store ?? (user as any)?.user_metadata?.store_id;
-      if (userStore !== undefined && userStore !== null) {
-        updates.store = userStore;
-      } else if (product.store !== undefined && product.store !== null) {
-        updates.store = product.store;
-      }
 
       const response = await apiService.updateProduct(product.id.toString(), updates);
       if (response.success) {
@@ -277,29 +219,72 @@ export default function ProductActionsModal({
     }));
   };
 
-  const handleImageClick = (imageUrl: string) => {
-    setSelectedImage(imageUrl);
-    setImageModalOpen(true);
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const validationError = validateImage(file);
+      if (validationError) {
+        alert(validationError);
+        return;
+      }
+
+      setSelectedFile(file);
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
   };
 
-  const closeImageModal = () => {
-    setImageModalOpen(false);
-    setSelectedImage(null);
+  const handleUpload = async () => {
+    if (!selectedFile) return;
+
+    setUploading(true);
+    try {
+      const imageUrl = await uploadImage(selectedFile, product.id.toString());
+      // Update the product's image URL
+      setFormData(prev => ({ ...prev, image: imageUrl }));
+      
+      // Show success message
+      const successMessage = document.createElement('div');
+      successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      successMessage.textContent = '✅ Image uploaded successfully!';
+      document.body.appendChild(successMessage);
+      setTimeout(() => {
+        document.body.removeChild(successMessage);
+      }, 3000);
+    } catch (error) {
+      console.error('Upload error:', error);
+      // Show error message
+      const errorMessage = document.createElement('div');
+      errorMessage.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
+      errorMessage.textContent = '❌ Failed to upload image. Please try again.';
+      document.body.appendChild(errorMessage);
+      setTimeout(() => {
+        document.body.removeChild(errorMessage);
+      }, 5000);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleRemoveImage = () => {
+    setSelectedFile(null);
+    setPreviewUrl('');
+    setFormData(prev => ({ ...prev, image: '' }));
   };
 
   // Add keyboard support for closing image modal
   React.useEffect(() => {
     const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && imageModalOpen) {
-        closeImageModal();
+      if (e.key === 'Escape') {
+        // Image modal functionality removed - simplified form
       }
     };
 
-    if (imageModalOpen) {
-      document.addEventListener('keydown', handleEscape);
-      return () => document.removeEventListener('keydown', handleEscape);
-    }
-  }, [imageModalOpen]);
+    document.addEventListener('keydown', handleEscape);
+    return () => {
+      document.removeEventListener('keydown', handleEscape);
+    };
+  }, []);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-IN', {
@@ -321,9 +306,6 @@ export default function ProductActionsModal({
     }
   };
 
-  // Debug logging
-  console.log('ProductActionsModal render:', { isOpen, product: product?.name, action });
-  
   if (!isOpen || !product) return null;
 
   return (
@@ -350,7 +332,7 @@ export default function ProductActionsModal({
           <div className="space-y-6">
             {/* Product Images */}
             {(() => {
-              const mainUrl = getProductImageUrl(product);
+              const mainUrl = product.main_image_url;
               const gallery = product.additional_images_urls || [];
               const hasAny = !!mainUrl || (Array.isArray(gallery) && gallery.length > 0);
               if (!hasAny) {
@@ -379,8 +361,7 @@ export default function ProductActionsModal({
                         <img
                             src={mainUrl}
                           alt={product.name}
-                          className="w-48 h-48 object-cover rounded-lg border cursor-pointer hover:scale-105 transition-transform duration-200"
-                            onClick={() => handleImageClick(mainUrl)}
+                          className="w-48 h-48 object-cover rounded-lg border"
                         />
                       </div>
                     </div>
@@ -394,8 +375,7 @@ export default function ProductActionsModal({
                             <img
                               src={imageUrl}
                               alt={`${product.name} - Image ${index + 1}`}
-                              className="w-24 h-24 object-cover rounded-lg border cursor-pointer hover:scale-105 transition-transform duration-200"
-                              onClick={() => handleImageClick(imageUrl)}
+                              className="w-24 h-24 object-cover rounded-lg border"
                             />
                           </div>
                         ))}
@@ -513,45 +493,52 @@ export default function ProductActionsModal({
 
         {action === 'edit' && (
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Basic Information */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Product Name *</Label>
-                <Input
-                  id="name"
-                  value={formData.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  placeholder="Enter product name"
-                  required
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="sku">SKU *</Label>
-                <Input
-                  id="sku"
-                  value={formData.sku}
-                  onChange={(e) => handleInputChange('sku', e.target.value)}
-                  placeholder="Enter SKU"
-                  required
-                />
-              </div>
-            </div>
-
+            {/* Product Name - Required */}
             <div className="space-y-2">
-              <Label htmlFor="description">Description</Label>
-              <Textarea
-                id="description"
-                value={formData.description}
-                onChange={(e) => handleInputChange('description', e.target.value)}
-                placeholder="Enter product description"
-                rows={3}
+              <Label htmlFor="name">Product Name *</Label>
+              <Input
+                id="name"
+                value={formData.name}
+                onChange={(e) => handleInputChange('name', e.target.value)}
+                placeholder="e.g., Gold Diamond Ring"
+                required
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* SKU - Required, Unique */}
+            <div className="space-y-2">
+              <Label htmlFor="sku">SKU *</Label>
+              <Input
+                id="sku"
+                value={formData.sku}
+                onChange={(e) => handleInputChange('sku', e.target.value)}
+                placeholder="e.g., GOLD-RING-001"
+                required
+              />
+            </div>
+
+            {/* Product Type & Category - Required */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="type">Product Type *</Label>
+                <Select value={formData.type || 'Necklace'} onValueChange={(value) => handleInputChange('type', value)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Necklace">Necklace</SelectItem>
+                    <SelectItem value="Ring">Ring</SelectItem>
+                    <SelectItem value="Earrings">Earrings</SelectItem>
+                    <SelectItem value="Bangles">Bangles</SelectItem>
+                    <SelectItem value="Bracelet">Bracelet</SelectItem>
+                    <SelectItem value="Chain">Chain</SelectItem>
+                    <SelectItem value="Pendant">Pendant</SelectItem>
+                    <SelectItem value="Watch">Watch</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="category">Category *</Label>
                 <Select
                   value={categorySelect}
                   onValueChange={(value) => {
@@ -561,7 +548,7 @@ export default function ProductActionsModal({
                   }}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder={formData.category || 'Select category'} />
+                    <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
                     {categories.map((category) => (
@@ -572,305 +559,134 @@ export default function ProductActionsModal({
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Brand field removed */}
             </div>
 
-            {/* Pricing */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {/* Price & Stock Quantity - Required */}
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="cost_price">Cost Price *</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
-                  <Input
-                    id="cost_price"
-                    type="text"
-                    value={formData.cost_price === 0 ? '' : formData.cost_price.toString()}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9.]/g, '');
-                      handleInputChange('cost_price', value ? parseFloat(value) : 0);
-                    }}
-                    placeholder="0.00"
-                    className="pl-8"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="selling_price">Selling Price *</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
-                  <Input
-                    id="selling_price"
-                    type="text"
-                    value={formData.selling_price === 0 ? '' : formData.selling_price.toString()}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9.]/g, '');
-                      handleInputChange('selling_price', value ? parseFloat(value) : 0);
-                    }}
-                    placeholder="0.00"
-                    className="pl-8"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="discount_price">Discount Price</Label>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500">₹</span>
-                  <Input
-                    id="discount_price"
-                    type="text"
-                    value={formData.discount_price === 0 ? '' : formData.discount_price.toString()}
-                    onChange={(e) => {
-                      const value = e.target.value.replace(/[^0-9.]/g, '');
-                      handleInputChange('discount_price', value ? parseFloat(value) : 0);
-                    }}
-                    placeholder="0.00"
-                    className="pl-8"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Inventory */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="quantity">Quantity *</Label>
+                <Label htmlFor="price">Price (₹) *</Label>
                 <Input
-                  id="quantity"
+                  id="price"
                   type="number"
-                  value={formData.quantity}
-                  onChange={(e) => handleInputChange('quantity', parseInt(e.target.value) || 0)}
+                  min="0"
+                  step="0.01"
+                  value={formData.price || ''}
+                  onChange={(e) => handleInputChange('price', e.target.value)}
+                  placeholder="0.00"
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="stock_quantity">Stock Quantity *</Label>
+                <Input
+                  id="stock_quantity"
+                  type="number"
+                  min="0"
+                  value={formData.stock_quantity || ''}
+                  onChange={(e) => handleInputChange('stock_quantity', e.target.value)}
                   placeholder="0"
                   required
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="min_quantity">Min Quantity</Label>
-                <Input
-                  id="min_quantity"
-                  type="number"
-                  value={formData.min_quantity}
-                  onChange={(e) => handleInputChange('min_quantity', parseInt(e.target.value) || 1)}
-                  placeholder="1"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="max_quantity">Max Quantity</Label>
-                <Input
-                  id="max_quantity"
-                  type="number"
-                  value={formData.max_quantity}
-                  onChange={(e) => handleInputChange('max_quantity', parseInt(e.target.value) || 100)}
-                  placeholder="100"
-                />
-              </div>
             </div>
 
-            {/* Product Details */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Product Image - Optional */}
+            <div className="space-y-2">
+              <Label htmlFor="image">Product Image</Label>
               <div className="space-y-2">
-                <Label htmlFor="material">Material</Label>
-                <Select
-                  value={materialSelect || getSelectValue(formData.material, MATERIAL_OPTIONS)}
-                  onValueChange={(value) => {
-                    setMaterialSelect(value);
-                    if (value === 'custom') {
-                      handleInputChange('material', formData.material || '');
-                    } else {
-                      handleInputChange('material', value);
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select material" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {MATERIAL_OPTIONS.map((opt) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                    <SelectItem value="custom">Custom…</SelectItem>
-                  </SelectContent>
-                </Select>
-                {materialSelect === 'custom' && (
                 <Input
-                  id="material"
-                  value={formData.material}
-                  onChange={(e) => handleInputChange('material', e.target.value)}
-                  placeholder="e.g., Gold, Silver, Platinum"
+                  type="file"
+                  accept="image/*"
+                  onChange={handleFileSelect}
+                  className="cursor-pointer"
                 />
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="color">Color</Label>
-                <Select
-                  value={colorSelect || getSelectValue(formData.color, COLOR_OPTIONS)}
-                  onValueChange={(value) => {
-                    setColorSelect(value);
-                    if (value === 'custom') {
-                      handleInputChange('color', formData.color || '');
-                    } else {
-                      handleInputChange('color', value);
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select color" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {COLOR_OPTIONS.map((opt) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                    <SelectItem value="custom">Custom…</SelectItem>
-                  </SelectContent>
-                </Select>
-                {colorSelect === 'custom' && (
-                <Input
-                  id="color"
-                  value={formData.color}
-                  onChange={(e) => handleInputChange('color', e.target.value)}
-                  placeholder="e.g., Yellow, White, Rose"
-                />
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="weight">Weight (g)</Label>
-                <Input
-                  id="weight"
-                  type="number"
-                  step="0.01"
-                  value={formData.weight}
-                  onChange={(e) => handleInputChange('weight', parseFloat(e.target.value) || 0)}
-                  placeholder="0.00"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="size">Karat</Label>
-                <Select
-                  value={karatSelect || getSelectValue(formData.size, KARAT_OPTIONS)}
-                  onValueChange={(value) => {
-                    setKaratSelect(value);
-                    if (value === 'custom') {
-                      handleInputChange('size', formData.size || '');
-                    } else {
-                      handleInputChange('size', value);
-                    }
-                  }}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select karat" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {KARAT_OPTIONS.map((opt) => (
-                      <SelectItem key={opt} value={opt}>{opt}</SelectItem>
-                    ))}
-                    <SelectItem value="custom">Custom…</SelectItem>
-                  </SelectContent>
-                </Select>
-                {karatSelect === 'custom' && (
-                <Input
-                  id="size"
-                  value={formData.size}
-                  onChange={(e) => handleInputChange('size', e.target.value)}
-                  placeholder="e.g., 18K, 22K"
-                />
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="dimensions">Dimensions</Label>
-                <Input
-                  id="dimensions"
-                  value={formData.dimensions}
-                  onChange={(e) => handleInputChange('dimensions', e.target.value)}
-                  placeholder="e.g., 10x5x2 cm"
-                />
-              </div>
-            </div>
-
-            {/* Image Upload */}
-            <ImageUpload
-              mainImage={mainImageUrl}
-              additionalImages={additionalImagesUrls}
-              onMainImageChange={setMainImage}
-              onAdditionalImagesChange={setAdditionalImages}
-            />
-
-            {/* Status and Features */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="status">Status</Label>
-                <Select
-                  value={formData.status}
-                  onValueChange={(value) => handleInputChange('status', value)}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select status" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="inactive">Inactive</SelectItem>
-                    <SelectItem value="out_of_stock">Out of Stock</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label>Product Features</Label>
-                <div className="space-y-2">
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="is_featured"
-                      checked={formData.is_featured}
-                      onCheckedChange={(checked) => handleInputChange('is_featured', checked)}
-                    />
-                    <Label htmlFor="is_featured">Featured Product</Label>
+                
+                {selectedFile && (
+                  <div className="flex items-center gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      onClick={handleUpload}
+                      disabled={uploading}
+                    >
+                      {uploading ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Upload className="w-4 h-4" />
+                      )}
+                      {uploading ? 'Uploading...' : 'Upload Image'}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleRemoveImage}
+                    >
+                      <X className="w-4 h-4" />
+                    </Button>
                   </div>
-                  <div className="flex items-center space-x-2">
-                    <Switch
-                      id="is_bestseller"
-                      checked={formData.is_bestseller}
-                      onCheckedChange={(checked) => handleInputChange('is_bestseller', checked)}
-                    />
-                    <Label htmlFor="is_bestseller">Best Seller</Label>
+                )}
+
+                {/* Image Preview */}
+                {(previewUrl || formData.image) && (
+                  <div className="mt-2">
+                    <div className="relative inline-block">
+                      <img
+                        src={previewUrl || formData.image}
+                        alt="Product preview"
+                        className="w-32 h-32 object-cover rounded border"
+                      />
+                      {formData.image && !previewUrl && (
+                        <div className="absolute top-1 right-1 bg-green-500 text-white text-xs px-1 py-0.5 rounded">
+                          ✓ Uploaded
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {formData.image && (
+                  <div className="text-sm text-green-600">
+                    ✓ Image uploaded successfully
+                  </div>
+                )}
               </div>
             </div>
 
-            <div className="flex gap-3">
-              <Button
-                type="submit"
-                disabled={loading}
-                className="flex-1"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  'Update Product'
-                )}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={loading}
-                className="flex-1"
-              >
+            {/* Description - Optional */}
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => handleInputChange('description', e.target.value)}
+                placeholder="Product description..."
+                rows={3}
+              />
+            </div>
+
+            {/* Status - Required */}
+            <div className="space-y-2">
+              <Label htmlFor="status">Status *</Label>
+              <Select value={formData.status || 'active'} onValueChange={(value) => handleInputChange('status', value)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="active">Active</SelectItem>
+                  <SelectItem value="inactive">Inactive</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Form Actions */}
+            <div className="flex justify-end gap-2 pt-4">
+              <Button type="button" variant="outline" onClick={onClose}>
                 Cancel
+              </Button>
+              <Button type="submit" disabled={loading}>
+                {loading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+                Update Product
               </Button>
             </div>
           </form>
@@ -918,33 +734,7 @@ export default function ProductActionsModal({
       </div>
 
       {/* Image Modal for Enlarged View with easy close */}
-      {imageModalOpen && selectedImage && (
-        <div 
-          className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-[60]"
-          onClick={closeImageModal}
-        >
-          <div 
-            className="relative max-w-4xl max-h-[90vh] p-4"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={closeImageModal}
-              className="absolute top-2 right-2 z-10 bg-white/20 hover:bg-white/30 text-white"
-            >
-              <X className="h-6 w-6" />
-            </Button>
-            {/* Add explicit close text for clarity */}
-            <div className="absolute top-2 left-2 text-white/80 text-xs">Click outside or press Close</div>
-            <img
-              src={selectedImage}
-              alt="Enlarged product image"
-              className="max-w-full max-h-full object-contain rounded-lg"
-            />
-          </div>
-        </div>
-      )}
+      {/* Image modal functionality removed - simplified form */}
     </div>
   );
 } 

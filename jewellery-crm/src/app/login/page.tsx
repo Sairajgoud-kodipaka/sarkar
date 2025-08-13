@@ -29,19 +29,24 @@ export default function LoginPage() {
   const isRedirectingRef = useRef(false);
 
   useEffect(() => {
-    console.log('🔐 Login page: Auth state changed:', { user, isLoading: isAuthLoading, isRedirectingRef: isRedirectingRef.current });
-    
-    if (!isAuthLoading && user && !isRedirectingRef.current) {
-      const userRole = user.user_metadata?.role as string | undefined;
-      console.log('🔐 Login page: User authenticated with role:', userRole);
+    if (user && !isRedirectingRef.current) {
+      isRedirectingRef.current = true;
       
-      if (userRole) {
-        isRedirectingRef.current = true;
-        console.log('🔐 Login page: Redirecting to role-based route...');
-        redirectBasedOnRole(userRole);
+      // Get user role and redirect accordingly
+      const userRole = user.user_metadata?.role || 'user';
+      
+      // Redirect to role-based route
+      if (userRole === 'business_admin') {
+        router.push('/business-admin/dashboard');
+      } else if (userRole === 'floor_manager') {
+        router.push('/floor-manager/dashboard');
+      } else if (userRole === 'sales') {
+        router.push('/sales/dashboard');
+      } else {
+        router.push('/platform/dashboard');
       }
     }
-  }, [user, isAuthLoading]);
+  }, [user, router]);
 
   // Cleanup on unmount
   useEffect(() => {

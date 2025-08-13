@@ -34,6 +34,7 @@ import {
   Calendar,
   ShoppingBag,
   X,
+  Activity,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -103,6 +104,11 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
         title: 'Support',
         href: '/business-admin/support',
         icon: MessageSquare,
+      },
+      {
+        title: 'Audit Logs',
+        href: '/business-admin/audit-logs',
+        icon: Activity,
       },
       {
         title: 'Settings',
@@ -181,11 +187,11 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
         href: '/sales/products',
         icon: Package,
       },
-      {
+      /*{
         title: 'Profile',
         href: '/sales/profile',
         icon: User,
-      },
+      },*/
       {
         title: 'Support',
         href: '/sales/support',
@@ -216,12 +222,8 @@ export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({
   const isMobileOrTablet = useIsMobileOrTablet();
   const isTouchDevice = useIsTouchDevice();
 
-  // Debug logging
-  console.log('Sidebar - isMobileOrTablet:', isMobileOrTablet, 'isOpen:', isOpen, 'onClose:', !!onClose);
-
-  // If no user, don't render sidebar
+  // Early return if no user
   if (!user) {
-    console.log('Sidebar - No user, returning null');
     return null;
   }
 
@@ -234,30 +236,36 @@ export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({
     return pathname.startsWith(href);
   }, [pathname]);
 
-  // Handle navigation item click
-  const handleNavItemClick = useCallback((e: React.MouseEvent | React.TouchEvent, item: NavItem) => {
-    console.log('NavItem clicked:', {
-      type: e.type,
-      title: item.title,
-      href: item.href,
-      onMobile: isMobileOrTablet,
-      isTouchDevice: isTouchDevice,
-      currentPath: pathname
-    });
-    
-    // Prevent default behavior
-    e.preventDefault();
-    e.stopPropagation();
-    
-    if (isMobileOrTablet && onClose) {
-      console.log('Closing sidebar on mobile navigation');
-      onClose();
+  const handleNavItemClick = (item: NavItem, event: React.MouseEvent | React.TouchEvent) => {
+    // Handle navigation
+    if (item.href) {
+      // Close sidebar on mobile navigation
+      if (isMobileOrTablet && onClose) {
+        onClose();
+      }
+      
+      // Navigate to the route
+      router.push(item.href);
     }
-    
-    // Navigate to the route
-    console.log('Navigating to:', item.href);
-    router.push(item.href);
-  }, [isMobileOrTablet, isTouchDevice, onClose, router, pathname]);
+  };
+
+  const handleTouchStart = (item: NavItem) => {
+    // Touch start handler for mobile
+  };
+
+  const handleTouchEnd = (item: NavItem) => {
+    // Touch end handler for mobile
+  };
+
+  const handleUserProfileClick = () => {
+    // Handle user profile click
+  };
+
+  const handleLogout = () => {
+    // Handle logout
+    logout();
+    router.push('/login');
+  };
 
   // Navigation Item Component
   const NavItemComponent = useCallback(({ item }: { item: NavItem }) => {
@@ -273,17 +281,17 @@ export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({
     ), [isActive, isMobileOrTablet, isTouchDevice]);
 
     const handleTouchStart = useCallback((e: React.TouchEvent) => {
-      console.log('Touch start on nav item:', item.title);
+      // console.log('Touch start on nav item:', item.title);
       (e.currentTarget as HTMLElement).style.transform = 'scale(0.98)';
     }, [item.title]);
 
     const handleTouchEnd = useCallback((e: React.TouchEvent) => {
-      console.log('Touch end on nav item:', item.title);
+      // console.log('Touch end on nav item:', item.title);
       (e.currentTarget as HTMLElement).style.transform = 'scale(1)';
     }, [item.title]);
 
     const handleClick = useCallback((e: React.MouseEvent) => {
-      handleNavItemClick(e, item);
+      handleNavItemClick(item, e);
     }, [handleNavItemClick, item]);
 
     return (
@@ -304,7 +312,7 @@ export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({
           onKeyDown={(e) => {
             if (e.key === 'Enter' || e.key === ' ') {
               e.preventDefault();
-              handleNavItemClick(e as any, item);
+              handleNavItemClick(item, e as any);
             }
           }}
           aria-label={`Navigate to ${item.title}`}
@@ -335,8 +343,6 @@ export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({
   }, []);
 
   // Always render the sidebar, let CSS handle the visibility
-  console.log('Sidebar - Rendering sidebar with props:', { isMobileOrTablet, isOpen, hasUser: !!user });
-
   return (
     <div
       ref={ref}
@@ -420,11 +426,11 @@ export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({
                 touchAction: 'manipulation'
               }}
               onTouchStart={(e) => {
-                console.log('Touch start on user profile button');
+                // console.log('Touch start on user profile button');
                 e.currentTarget.style.transform = 'scale(0.98)';
               }}
               onTouchEnd={(e) => {
-                console.log('Touch end on user profile button');
+                // console.log('Touch end on user profile button');
                 e.currentTarget.style.transform = 'scale(1)';
               }}
             >
@@ -475,13 +481,7 @@ export const Sidebar = React.memo(forwardRef<HTMLDivElement, SidebarProps>(({
             
             <DropdownMenuItem 
               className="text-destructive touch-manipulation" 
-              onClick={async (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                console.log('Logout clicked');
-                await logout();
-                router.push('/login');
-              }}
+              onClick={handleLogout}
             >
               <LogOut className="mr-2 h-4 w-4" />
               Sign Out

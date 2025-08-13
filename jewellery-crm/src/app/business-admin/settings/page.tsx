@@ -442,7 +442,7 @@ export default function SettingsPage() {
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <h1 className="text-xl sm:text-2xl font-semibold text-text-primary">Business Settings</h1>
         <Button 
-          className="flex items-center gap-2 w-full sm:w-auto" 
+          className="flex items-center gap-2 h-12 w-full sm:h-9 sm:w-auto" 
           onClick={async () => {
             try {
               setSavingGeneral(true);
@@ -473,18 +473,20 @@ export default function SettingsPage() {
       {/* Main Content Tabs */}
       <Tabs defaultValue="general" className="space-y-6">
         <div className="overflow-x-auto">
-          <TabsList className="w-full min-w-max grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 p-1 bg-muted/50">
-            <TabsTrigger value="general" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">General</TabsTrigger>
-            <TabsTrigger value="team" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Team</TabsTrigger>
-            <TabsTrigger value="stores" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Stores</TabsTrigger>
-            <TabsTrigger value="integrations" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Integrations</TabsTrigger>
-            <TabsTrigger value="notifications" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Notifications</TabsTrigger>
-            <TabsTrigger value="security" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Security</TabsTrigger>
+          <TabsList className="w-full min-w-max bg-muted/50">
+            <div className="flex gap-2 p-1">
+              <TabsTrigger value="general" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">General</TabsTrigger>
+              <TabsTrigger value="team" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Team</TabsTrigger>
+              <TabsTrigger value="stores" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Stores</TabsTrigger>
+              <TabsTrigger value="integrations" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Integrations</TabsTrigger>
+              <TabsTrigger value="notifications" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Notifications</TabsTrigger>
+              <TabsTrigger value="security" className="text-xs sm:text-sm px-2 sm:px-3 py-2 whitespace-nowrap">Security</TabsTrigger>
+            </div>
           </TabsList>
         </div>
 
         <TabsContent value="general" className="space-y-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+          <div className="grid grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-2">
             <Card className="w-full">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-base sm:text-lg">

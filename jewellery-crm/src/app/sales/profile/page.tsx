@@ -116,7 +116,6 @@ export default function SalesProfilePage() {
           });
         }
       } else {
-        console.log('No team members found');
         setProfile(null);
       }
     } catch (error) {
@@ -152,7 +151,6 @@ export default function SalesProfilePage() {
   const handleSave = async () => {
     try {
       // Here you would make an API call to update the profile
-      console.log('Saving profile:', editForm);
       
       // Mock successful update
       if (profile) {

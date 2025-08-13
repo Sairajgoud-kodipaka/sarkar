@@ -6,74 +6,37 @@ export interface UploadResult {
   error?: string;
 }
 
-export const uploadImage = async (file: File): Promise<UploadResult> => {
+export async function uploadImage(file: File, productId: string): Promise<string> {
   try {
-    console.log('🚀 Starting image upload...');
-    console.log('📁 File details:', {
-      name: file.name,
-      size: file.size,
-      type: file.type
-    });
-
-    // Generate a unique filename
-    const fileExt = file.name.split('.').pop();
-    const fileName = `${Math.random().toString(36).substring(2)}.${fileExt}`;
+    // Generate unique filename
+    const fileExtension = file.name.split('.').pop();
+    const fileName = `${productId}-${Date.now()}.${fileExtension}`;
     const filePath = `products/${fileName}`;
 
-    console.log('📂 File path:', filePath);
-
-    // Upload the file to Supabase Storage directly
-    console.log('📤 Uploading file to Supabase Storage...');
+    // Upload file to Supabase Storage
     const { data, error } = await supabase.storage
       .from('product-images')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: false
-      });
+      .upload(filePath, file);
 
     if (error) {
-      console.error('❌ Upload error:', error);
-      console.error('❌ Error details:', {
-        message: error.message,
-        name: error.name,
-        ...(error as any).statusCode && { statusCode: (error as any).statusCode }
-      });
-      
-      // If bucket doesn't exist or access denied, return a clear message
-      if (/not\s+found|does\s+not\s+exist|bucket/i.test(error.message)) {
-        return {
-          url: '',
-          path: filePath,
-          error: 'product-images bucket missing or not accessible. Ensure it exists and policies allow authenticated uploads.'
-        };
-      }
-
-      return { url: '', path: '', error: error.message };
+      throw new Error(`Upload failed: ${error.message}`);
     }
 
-    console.log('✅ File uploaded successfully:', data);
-
-    // Get the public URL
-    console.log('🔗 Getting public URL...');
-    const { data: { publicUrl } } = supabase.storage
+    // Get public URL
+    const { data: urlData } = supabase.storage
       .from('product-images')
       .getPublicUrl(filePath);
 
-    console.log('✅ Public URL generated:', publicUrl);
+    if (!urlData.publicUrl) {
+      throw new Error('Failed to generate public URL');
+    }
 
-    return {
-      url: publicUrl,
-      path: filePath
-    };
+    return urlData.publicUrl;
   } catch (error) {
-    console.error('💥 Upload failed with exception:', error);
-    return { 
-      url: '', 
-      path: '', 
-      error: error instanceof Error ? error.message : 'Upload failed' 
-    };
+    console.error('Image upload error:', error);
+    throw error;
   }
-};
+}
 
 export const deleteImage = async (path: string): Promise<boolean> => {
   try {

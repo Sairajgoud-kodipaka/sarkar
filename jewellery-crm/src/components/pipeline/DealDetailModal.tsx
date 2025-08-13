@@ -51,27 +51,22 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
   const { userScope } = useScopedVisibility();
 
   useEffect(() => {
-    if (open && dealId) {
+    if (dealId) {
       fetchDeal();
     }
-  }, [open, dealId]);
+  }, [dealId]);
 
   const fetchDeal = async () => {
     try {
       setLoading(true);
       
-      console.log('Fetching deal with ID:', dealId);
-      console.log('User scope:', userScope);
-      
       // Use scoped endpoint based on user role
       let response;
       if (userScope.type === 'own') {
         // For salespeople, use the "my" endpoint
-        console.log('Using getMyPipeline endpoint for user scope:', userScope.type);
         response = await apiService.getMyPipeline(dealId!);
       } else {
         // For managers and admins, use the regular endpoint (backend middleware handles scoping)
-        console.log('Using getPipeline endpoint for user scope:', userScope.type);
         response = await apiService.getPipeline(dealId!);
       }
       
@@ -102,10 +97,8 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
       
       // Handle 404 errors (pipeline not found or no permission)
       if (error.message && error.message.includes('Not found')) {
-        console.log('Pipeline not found or access denied - this is expected for scoped visibility');
         // Don't close the modal automatically, just show an error
         // The modal will show "Deal Not Found" message instead
-        console.error('Pipeline not found. This might be a data inconsistency issue.');
       }
     } finally {
       setLoading(false);
@@ -144,12 +137,10 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
       const response = await apiService.updatePipeline(dealId!, pipelineData);
       
       if (response.success) {
-        console.log('Deal updated successfully');
         onDealUpdated();
         setIsEditing(false);
         fetchDeal(); // Refresh deal data
       } else {
-        console.error('Failed to update deal:', response);
         alert('Failed to update deal. Please try again.');
       }
     } catch (error) {
@@ -166,11 +157,9 @@ export function DealDetailModal({ open, onClose, dealId, onDealUpdated }: DealDe
       const response = await apiService.updatePipelineStage(dealId!, { stage: newStage });
       
       if (response.success) {
-        console.log('Stage updated successfully');
         onDealUpdated();
         fetchDeal(); // Refresh deal data
       } else {
-        console.error('Failed to update stage:', response);
         alert('Failed to update stage. Please try again.');
       }
     } catch (error) {

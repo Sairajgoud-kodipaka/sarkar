@@ -88,9 +88,6 @@ export default function PlatformSupportTicketDetailPage() {
         apiService.getTicketMessages(ticketId)
       ]);
       
-      console.log('Ticket Response:', ticketResponse);
-      console.log('Messages Response:', messagesResponse);
-      
       if (ticketResponse.success && ticketResponse.data) {
         setTicket(ticketResponse.data);
       } else {
@@ -101,14 +98,11 @@ export default function PlatformSupportTicketDetailPage() {
       // Ensure messages is always an array
       if (messagesResponse.success && messagesResponse.data) {
         const messagesData = Array.isArray(messagesResponse.data) ? messagesResponse.data : (messagesResponse.data as any).results || [];
-        console.log('Messages data:', messagesData);
         setMessages(messagesData);
       } else {
-        console.log('No messages data, setting empty array');
         setMessages([]);
       }
     } catch (err) {
-      console.error('Failed to fetch ticket details:', err);
       setError('Failed to load ticket details');
     } finally {
       setLoading(false);
@@ -134,7 +128,6 @@ export default function PlatformSupportTicketDetailPage() {
         setMessages(messagesData);
       }
     } catch (err) {
-      console.error('Failed to send message:', err);
       setError('Failed to send message');
     } finally {
       setSending(false);
@@ -147,7 +140,6 @@ export default function PlatformSupportTicketDetailPage() {
       await fetchTicketDetails(); // Refresh ticket data
       setStatusUpdate('');
     } catch (err) {
-      console.error('Failed to update ticket status:', err);
       setError('Failed to update ticket status');
     }
   };
@@ -157,7 +149,6 @@ export default function PlatformSupportTicketDetailPage() {
       await apiService.assignTicketToMe(ticketId);
       await fetchTicketDetails(); // Refresh ticket data
     } catch (err) {
-      console.error('Failed to assign ticket:', err);
       setError('Failed to assign ticket');
     }
   };
@@ -167,7 +158,6 @@ export default function PlatformSupportTicketDetailPage() {
       await apiService.resolveTicket(ticketId);
       await fetchTicketDetails(); // Refresh ticket data
     } catch (err) {
-      console.error('Failed to resolve ticket:', err);
       setError('Failed to resolve ticket');
     }
   };
@@ -177,26 +167,22 @@ export default function PlatformSupportTicketDetailPage() {
       await apiService.closeTicket(ticketId);
       await fetchTicketDetails(); // Refresh ticket data
     } catch (err) {
-      console.error('Failed to close ticket:', err);
       setError('Failed to close ticket');
     }
   };
 
   useEffect(() => {
     if (!isAuthenticated) {
-      console.log('User not authenticated, redirecting to login');
       router.push('/login');
       return;
     }
     
     if (user?.role !== 'platform_admin') {
-      console.log('User is not platform admin, redirecting');
       router.push('/select-role');
       return;
     }
     
     if (ticketId) {
-      console.log('Platform admin authenticated, fetching ticket details:', { user, isAuthenticated });
       fetchTicketDetails();
     }
   }, [ticketId, isAuthenticated, user, router]);

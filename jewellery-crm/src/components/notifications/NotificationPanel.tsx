@@ -477,7 +477,6 @@ export const NotificationPanel: React.FC<NotificationPanelProps> = ({ onClose })
               className="text-xs"
               onClick={() => {
                 // TODO: Navigate to notifications page
-                console.log('View all notifications');
               }}
             >
               View all

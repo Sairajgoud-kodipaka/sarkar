@@ -95,7 +95,6 @@ export function AddDealModal({ open, onClose, onDealCreated }: AddDealModalProps
       const response = await apiService.createDeal(payload);
       
       if (response.success) {
-        console.log('Deal created successfully');
         onDealCreated();
         onClose();
         // Reset form

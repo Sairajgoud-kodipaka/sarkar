@@ -79,36 +79,29 @@ export default function CategoriesModal({ isOpen, onClose, onSuccess }: Categori
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setLoading(true);
-    setError(null);
-
-    console.log('Submitting category form:', formData);
-
+    
     try {
+      setLoading(true);
+      setError(null);
+      
       let response;
+      
       if (editingCategory) {
-        console.log('Updating category:', editingCategory);
         response = await apiService.updateCategory(editingCategory.toString(), formData);
       } else {
-        console.log('Creating new category');
         // Add store ID from authenticated user for new categories
         const categoryData = {
           ...formData,
           store: (user as any)?.storeId ?? (user as any)?.store ?? undefined
         };
-        console.log('Category data to send:', categoryData);
         response = await apiService.createCategory(categoryData);
       }
-
-      console.log('API response:', response);
-
+      
       if (response.success) {
-        console.log('Category operation successful');
         onSuccess();
         resetForm();
         fetchCategories();
       } else {
-        console.error('Category operation failed:', response.message);
         setError(response.message || `Failed to ${editingCategory ? 'update' : 'create'} category`);
       }
     } catch (error: any) {

@@ -1,0 +1,4 @@
+name,sku,type,category,price,description,stock_quantity,status,image_url,main_image_url,additional_images_urls
+Gold Ring Test,GR-TEST-001,Ring,Gold Jewellery,15000.00,Beautiful 22K gold ring for testing,5,active,https://example.com/test1.jpg,https://example.com/test-main.jpg,https://example.com/test1.jpg|https://example.com/test2.jpg
+Silver Necklace Test,SN-TEST-001,Necklace,Silver Jewellery,8000.00,Elegant silver necklace for testing,8,active,https://example.com/test-necklace.jpg,https://example.com/test-necklace-main.jpg,https://example.com/necklace1.jpg
+Diamond Ring Test,DR-TEST-001,Ring,Diamond Jewellery,50000.00,Stunning diamond ring for testing,3,active,https://example.com/test-diamond.jpg,https://example.com/test-diamond-main.jpg,https://example.com/diamond1.jpg|https://example.com/diamond2.jpg

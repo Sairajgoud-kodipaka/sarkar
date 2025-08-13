@@ -55,22 +55,32 @@ import { apiService } from '@/lib/api-service';
 import { useAuth } from '@/hooks/useAuth';
 
 interface DashboardData {
-  visitors: {
+  // New visitors (people entering the store)
+  new_visitors: {
     today: number;
     this_week: number;
     this_month: number;
-    previous_day?: number;
-    previous_week?: number;
-    previous_month?: number;
   };
+  
+  // Sales data
   sales: {
     today: number;
     this_week: number;
     this_month: number;
-    previous_day?: number;
-    previous_week?: number;
-    previous_month?: number;
   };
+  
+  // Current floor occupancy (active customers right now)
+  current_floor_occupancy: {
+    floor_1: number;
+    floor_2: number;
+    floor_3: number;
+    total_active: number;
+  };
+  
+  // Total customers in the system
+  total_customers: number;
+  
+  // Floor customer details (for expandable view)
   floor_customers: Array<{
     floor: number;
     customers: Array<{
@@ -144,8 +154,8 @@ export function BusinessAdminDashboard() {
       switch (dataType) {
         case 'visitors':
           if (dashboardData) {
-            csvContent = `Date,Visitors Today,Visitors This Week,Visitors This Month\n${timestamp},${dashboardData.visitors.today},${dashboardData.visitors.this_week},${dashboardData.visitors.this_month}`;
-            filename = `visitors_${timestamp}.csv`;
+            csvContent = `Date,New Visitors Today,New Visitors This Week,New Visitors This Month\n${timestamp},${dashboardData.new_visitors.today},${dashboardData.new_visitors.this_week},${dashboardData.new_visitors.this_month}`;
+            filename = `new_visitors_${timestamp}.csv`;
           }
           break;
         case 'sales':
@@ -274,14 +284,14 @@ export function BusinessAdminDashboard() {
       {/* Enhanced 3x3 Grid Layout with Better Spacing */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         
-        {/* Top Row - Visitor Statistics */}
+        {/* Top Row - New Visitor Statistics */}
         <div className="bg-white rounded-lg border border-border-light p-6 hover:shadow-md transition-all duration-200 group">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center space-x-2">
               <div className="p-2 bg-primary-50 rounded-lg group-hover:bg-primary-100 transition-colors duration-200">
                 <Users className="w-5 h-5 text-primary-500" />
               </div>
-              <h3 className="text-lg font-medium text-text-primary">Visitors Today</h3>
+              <h3 className="text-lg font-medium text-text-primary">New Visitors Today</h3>
             </div>
             <Button
               variant="ghost"
@@ -294,16 +304,16 @@ export function BusinessAdminDashboard() {
           </div>
           <div className="text-center">
             <p className="text-3xl font-semibold text-text-primary mb-2">
-              {dashboardData?.visitors.today || 0}
+              {dashboardData?.new_visitors.today || 0}
             </p>
             <p className="text-sm text-text-secondary mb-3">
-              people visited today
+              new people entered today
             </p>
-            {/* Trend indicator placeholder */}
+            {/* Daily trend indicator */}
             <div className="text-xs text-text-muted">
               <div className="flex items-center justify-center space-x-1">
-                <Activity className="w-3 h-3" />
-                <span>Live tracking</span>
+                <TrendingUp className="w-3 h-3" />
+                <span>Daily activity</span>
               </div>
             </div>
           </div>
@@ -315,7 +325,7 @@ export function BusinessAdminDashboard() {
               <div className="p-2 bg-primary-50 rounded-lg group-hover:bg-primary-100 transition-colors duration-200">
                 <Calendar className="w-5 h-5 text-primary-500" />
               </div>
-              <h3 className="text-lg font-medium text-text-primary">Visitors This Week</h3>
+              <h3 className="text-lg font-medium text-text-primary">New Visitors This Week</h3>
             </div>
             <Button
               variant="ghost"
@@ -328,19 +338,18 @@ export function BusinessAdminDashboard() {
           </div>
           <div className="text-center">
             <p className="text-3xl font-semibold text-text-primary mb-2">
-              {dashboardData?.visitors.this_week || 0}
+              {dashboardData?.new_visitors.this_week || 0}
             </p>
             <p className="text-sm text-text-secondary mb-3">
-              people visited this week
+              new people entered this week
             </p>
-            {/* Progress bar for weekly progress */}
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div 
-                className="bg-primary-500 h-2 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min((dashboardData?.visitors.this_week || 0) / 100 * 100, 100)}%` }}
-              ></div>
+            {/* Weekly trend visualization */}
+            <div className="flex items-center justify-center space-x-1">
+              <div className="w-2 h-8 bg-primary-200 rounded-full"></div>
+              <div className="w-2 h-12 bg-primary-300 rounded-full"></div>
+              <div className="w-2 h-16 bg-primary-500 rounded-full"></div>
+              <div className="w-2 h-10 bg-primary-400 rounded-full"></div>
             </div>
-            <p className="text-xs text-text-muted mt-2">Weekly target: 100</p>
           </div>
         </div>
 
@@ -350,7 +359,7 @@ export function BusinessAdminDashboard() {
               <div className="p-2 bg-primary-50 rounded-lg group-hover:bg-primary-100 transition-colors duration-200">
                 <TrendingUp className="w-5 h-5 text-primary-500" />
               </div>
-              <h3 className="text-lg font-medium text-text-primary">Visitors This Month</h3>
+              <h3 className="text-lg font-medium text-text-primary">New Visitors This Month</h3>
             </div>
             <Button
               variant="ghost"
@@ -363,10 +372,10 @@ export function BusinessAdminDashboard() {
           </div>
           <div className="text-center">
             <p className="text-3xl font-semibold text-text-primary mb-2">
-              {dashboardData?.visitors.this_month || 0}
+              {dashboardData?.new_visitors.this_month || 0}
             </p>
             <p className="text-sm text-text-secondary mb-3">
-              people visited this month
+              new people entered this month
             </p>
             {/* Monthly trend visualization */}
             <div className="flex items-center justify-center space-x-1">
@@ -407,7 +416,7 @@ export function BusinessAdminDashboard() {
             {/* Sales trend indicator */}
             <div className="inline-flex items-center px-2 py-1 rounded-full bg-success-green/10 text-success-green text-xs">
               <TrendingUp className="w-3 h-3 mr-1" />
-              <span>+12.5%</span>
+              <span>Today's sales</span>
             </div>
           </div>
         </div>
@@ -437,14 +446,13 @@ export function BusinessAdminDashboard() {
             <p className="text-sm text-text-secondary mb-3">
               sales this week
             </p>
-            {/* Weekly sales progress */}
-            <div className="w-full bg-gray-100 rounded-full h-2">
-              <div 
-                className="bg-success-green h-2 rounded-full transition-all duration-500"
-                style={{ width: `${Math.min((dashboardData?.sales.this_week || 0) / 50000 * 100, 100)}%` }}
-              ></div>
+            {/* Weekly sales trend visualization */}
+            <div className="flex items-center justify-center space-x-1">
+              <div className="w-3 h-12 bg-success-green/30 rounded-full"></div>
+              <div className="w-3 h-16 bg-success-green/50 rounded-full"></div>
+              <div className="w-3 h-20 bg-success-green rounded-full"></div>
+              <div className="w-3 h-14 bg-success-green/70 rounded-full"></div>
             </div>
-            <p className="text-xs text-text-muted mt-2">Target: ₹50,000</p>
           </div>
         </div>
 
@@ -483,11 +491,16 @@ export function BusinessAdminDashboard() {
           </div>
         </div>
 
-        {/* Bottom Row - Floor Customer Data */}
+        {/* Bottom Row - Current Floor Occupancy */}
         {[1, 2, 3].map((floor) => {
           const floorData = dashboardData?.floor_customers.find(f => f.floor === floor);
           const isExpanded = expandedFloors.has(floor);
           const customersList = floorData?.customers || [];
+          
+          // Get current floor occupancy from new data structure
+          const currentOccupancy = floor === 1 ? dashboardData?.current_floor_occupancy.floor_1 || 0 :
+                                  floor === 2 ? dashboardData?.current_floor_occupancy.floor_2 || 0 :
+                                  dashboardData?.current_floor_occupancy.floor_3 || 0;
           
           return (
             <div key={floor} className="bg-white rounded-lg border border-border-light p-6 hover:shadow-md transition-all duration-200 group">
@@ -496,7 +509,7 @@ export function BusinessAdminDashboard() {
                   <div className="p-2 bg-navy-50 rounded-lg group-hover:bg-navy-100 transition-colors duration-200">
                     <Target className="w-5 h-5 text-navy-500" />
                   </div>
-                  <h3 className="text-lg font-medium text-text-primary">Floor {floor} Customers</h3>
+                  <h3 className="text-lg font-medium text-text-primary">Floor {floor} (Current)</h3>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Button
@@ -512,19 +525,18 @@ export function BusinessAdminDashboard() {
               
               <div className="text-center mb-4">
                 <p className="text-3xl font-semibold text-text-primary mb-2">
-                  {customersList.length}
+                  {currentOccupancy}
                 </p>
                 <p className="text-sm text-text-secondary mb-3">
-                  customers
+                  active customers
                 </p>
                 {/* Floor occupancy indicator */}
-                <div className="w-full bg-gray-100 rounded-full h-2">
-                  <div 
-                    className="bg-navy-500 h-2 rounded-full transition-all duration-500"
-                    style={{ width: `${Math.min((customersList.length / 20) * 100, 100)}%` }}
-                  ></div>
+                <div className="flex items-center justify-center space-x-1">
+                  <div className="w-3 h-8 bg-navy-200 rounded-full"></div>
+                  <div className="w-3 h-12 bg-navy-300 rounded-full"></div>
+                  <div className="w-3 h-16 bg-navy-500 rounded-full"></div>
+                  <div className="w-3 h-10 bg-navy-400 rounded-full"></div>
                 </div>
-                <p className="text-xs text-text-muted mt-2">Capacity: 20 customers</p>
               </div>
 
               {/* Enhanced Customer Table */}
@@ -564,54 +576,70 @@ export function BusinessAdminDashboard() {
             </div>
           );
         })}
+        
+        {/* Summary Card - Total Customers */}
+        <div className="col-span-full bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 p-6">
+          <div className="text-center">
+            <h3 className="text-xl font-semibold text-blue-800 mb-2">System Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="text-center">
+                <p className="text-2xl font-bold text-blue-600">
+                  {dashboardData?.total_customers || 0}
+                </p>
+                <p className="text-sm text-blue-700">Total Customers</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-green-600">
+                  {dashboardData?.current_floor_occupancy?.total_active || 0}
+                </p>
+                <p className="text-sm text-green-700">Currently Active</p>
+              </div>
+              <div className="text-center">
+                <p className="text-2xl font-bold text-purple-600">
+                  {dashboardData?.new_visitors?.this_week || 0}
+                </p>
+                <p className="text-sm text-purple-700">New This Week</p>
+              </div>
+            </div>
+            <div className="mt-4 p-3 bg-blue-100 rounded-lg">
+              <p className="text-sm text-blue-800">
+                <strong>Logic:</strong> New Visitors + Existing Customers = Total System Activity
+              </p>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {/* Enhanced Status Bar with Better Visual Feedback */}
+            {/* Export Buttons */}
       <div className="mt-8 p-6 bg-white rounded-lg border border-border-light hover:shadow-md transition-all duration-200">
-        <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
-          <div className="flex flex-col sm:flex-row sm:items-center space-y-2 sm:space-y-0 sm:space-x-6">
-            <div className="flex items-center space-x-2">
-              <div className="w-3 h-3 bg-success-green rounded-full animate-pulse"></div>
-              <span className="text-sm font-medium text-text-primary">Live data</span>
-            </div>
-            <div className="flex items-center space-x-2 text-sm text-text-muted">
-              <Clock className="w-4 h-4" />
-              <span>Updates every 30 seconds</span>
-            </div>
-            <div className="flex items-center space-x-2 text-sm text-text-muted">
-              <span>Last updated: {lastUpdated.toLocaleTimeString()}</span>
-            </div>
-          </div>
-          
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadCSV('visitors')}
-              className="btn-secondary hover:bg-primary-50 transition-colors duration-200"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export Visitors
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadCSV('sales')}
-              className="btn-secondary hover:bg-primary-50 transition-colors duration-200"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export Sales
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => downloadCSV('customers')}
-              className="btn-secondary hover:bg-primary-50 transition-colors duration-200"
-            >
-              <Download className="w-4 h-4 mr-2" />
-              Export Customers
-            </Button>
-          </div>
+        <div className="flex flex-wrap items-center justify-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadCSV('visitors')}
+            className="btn-secondary hover:bg-primary-50 transition-colors duration-200"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Visitors
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadCSV('sales')}
+            className="btn-secondary hover:bg-primary-50 transition-colors duration-200"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Sales
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => downloadCSV('customers')}
+            className="btn-secondary hover:bg-primary-50 transition-colors duration-200"
+          >
+            <Download className="w-4 h-4 mr-2" />
+            Export Customers
+          </Button>
         </div>
       </div>
     </DashboardLayout>

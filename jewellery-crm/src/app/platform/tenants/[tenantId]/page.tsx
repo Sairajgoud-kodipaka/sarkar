@@ -47,6 +47,7 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editData, setEditData] = useState<Partial<Tenant>>({});
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const fetchTenant = async () => {
@@ -54,19 +55,15 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
         setLoading(true);
         setError(null);
         
-        console.log('Fetching tenant details for ID:', tenantId);
         const response = await apiService.getTenant(tenantId);
-        console.log('Tenant API Response:', response);
         
         if (response.success && response.data) {
           setTenant(response.data);
           setEditData(response.data);
         } else {
-          console.log('API response failed:', response);
           setError(`Failed to fetch tenant: ${response.message || 'Unknown error'}`);
         }
       } catch (err) {
-        console.error('Error fetching tenant:', err);
         setError(`Failed to load tenant data: ${err instanceof Error ? err.message : 'Unknown error'}`);
       } finally {
         setLoading(false);
@@ -77,28 +74,19 @@ export default function TenantDetailPage({ params }: { params: Promise<{ tenantI
   }, [tenantId]);
 
   const handleSave = async () => {
-    if (!tenant) return;
-    
     try {
-      console.log('Saving tenant data:', editData);
+      setSaving(true);
+      setError(null);
+      
       // TODO: Implement updateTenant method in API service
       // const response = await apiService.updateTenant(tenantId, editData);
       
-      // if (response.success) {
-      //   setTenant(response.data);
-      //   setIsEditing(false);
-      //   console.log('Tenant updated successfully');
-      // } else {
-      //   console.error('Failed to update tenant:', response.message);
-      //   setError(`Failed to update tenant: ${response.message}`);
-      // }
-      
-      // Temporary: just close editing mode
-      setIsEditing(false);
-      console.log('Tenant update functionality not yet implemented');
+      // For now, just show a message
+      alert('Tenant update functionality not yet implemented');
     } catch (err) {
-      console.error('Error updating tenant:', err);
       setError(`Failed to update tenant: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    } finally {
+      setSaving(false);
     }
   };
 

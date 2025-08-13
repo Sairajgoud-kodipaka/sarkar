@@ -23,8 +23,6 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
   const isModalOpen = isOpen !== undefined ? isOpen : open;
   const handleClose = onClose || (() => setOpen(false));
   
-  // Debug logging
-  console.log('AddProductModal render:', { isOpen, isModalOpen, open });
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [categories, setCategories] = useState<Array<{id: number, name: string}>>([]);
@@ -107,21 +105,9 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
 
     setUploading(true);
     try {
-      const result = await uploadImage(selectedFile);
-      if (result.error) {
-        // Show error message in a more user-friendly way
-        const errorMessage = document.createElement('div');
-        errorMessage.className = 'fixed top-4 right-4 bg-red-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
-        errorMessage.textContent = `❌ Upload failed: ${result.error}`;
-        document.body.appendChild(errorMessage);
-        setTimeout(() => {
-          document.body.removeChild(errorMessage);
-        }, 5000);
-        return;
-      }
-
-      setFormData({ ...formData, image: result.url });
-      console.log('Image uploaded successfully:', result.url);
+      const imageUrl = await uploadImage(selectedFile, Date.now().toString());
+      setFormData({ ...formData, image: imageUrl });
+      
       // Show success message in a more user-friendly way
       const successMessage = document.createElement('div');
       successMessage.className = 'fixed top-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg z-50';
@@ -187,7 +173,6 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
         throw new Error(response.message || 'Failed to create category');
       }
     } catch (error) {
-      console.error('Error creating category:', error);
       alert('Failed to create category. Please try again.');
     } finally {
       setCreatingCategory(false);
@@ -240,11 +225,9 @@ export default function AddProductModal({ isOpen, onClose, onSuccess }: AddProdu
         status: formData.status
       };
 
-      console.log('Creating product with data:', productData);
       const result = await apiService.createProduct(productData);
       
       if (result.success) {
-        console.log('Product created successfully:', result.data);
         if (isOpen !== undefined) {
           handleClose();
         } else {
