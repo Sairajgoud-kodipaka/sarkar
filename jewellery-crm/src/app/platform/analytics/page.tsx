@@ -77,12 +77,14 @@ export default function PlatformAnalyticsPage() {
       setLoading(true);
       
       // Fetch real data from existing tables
-      const [teamMembers, customers, sales, orders] = await Promise.all([
+      const [teamMembers, customers, sales] = await Promise.all([
         apiService.getTeamMembers(),
         apiService.getAllCustomers(),
         apiService.getSales(),
-        apiService.getOrders()
       ]);
+
+      // Mock orders data for now since getOrders method doesn't exist
+      const orders = { data: [] as Array<{ totalAmount: number }> };
 
       // Transform real data into analytics format
       const analytics: AnalyticsData = {

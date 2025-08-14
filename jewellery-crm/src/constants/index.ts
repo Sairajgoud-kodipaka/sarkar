@@ -3,52 +3,42 @@
  * This file contains all the constants used throughout the application
  */
 
-// ================================
-// USER ROLES & PERMISSIONS
-// ================================
-
+// USER ROLES
 export const USER_ROLES = {
-  PLATFORM_ADMIN: 'platform_admin',
   BUSINESS_ADMIN: 'business_admin',
-  STORE_MANAGER: 'store_manager',
-  SALES_TEAM: 'sales_team',
+  FLOOR_MANAGER: 'floor_manager',
+  SALES_ASSOCIATE: 'sales_associate',
 } as const;
 
+// ROLE-BASED PERMISSIONS
 export const ROLE_PERMISSIONS = {
-  [USER_ROLES.PLATFORM_ADMIN]: [
-    'manage_tenants',
-    'view_system_analytics',
-    'manage_billing',
-    'manage_users',
-    'access_all_data',
-  ],
   [USER_ROLES.BUSINESS_ADMIN]: [
-    'manage_business_settings',
     'manage_stores',
-    'manage_team_members',
-    'view_business_analytics',
-    'manage_products',
-    'manage_ecommerce',
-    'manage_whatsapp',
-  ],
-  [USER_ROLES.STORE_MANAGER]: [
-    'manage_store_customers',
-    'assign_leads',
-    'view_store_analytics',
-    'manage_appointments',
-    'manage_store_inventory',
-    'process_orders',
-    'manage_promotions',
-  ],
-  [USER_ROLES.SALES_TEAM]: [
+    'manage_floors',
+    'manage_team',
+    'view_all_data',
     'manage_customers',
-    'book_appointments',
-    'track_sales',
-    'send_whatsapp',
-    'view_performance',
-    'access_catalog',
-    'create_quotes',
-    'process_orders',
+    'manage_products',
+    'manage_sales',
+    'manage_appointments',
+    'generate_reports',
+    'system_settings'
+  ],
+  [USER_ROLES.FLOOR_MANAGER]: [
+    'manage_floor',
+    'manage_sales_team',
+    'view_floor_data',
+    'manage_customers',
+    'manage_sales',
+    'manage_appointments',
+    'floor_reports'
+  ],
+  [USER_ROLES.SALES_ASSOCIATE]: [
+    'view_floor_data',
+    'manage_customers',
+    'create_sales',
+    'view_appointments',
+    'personal_reports'
   ],
 } as const;
 

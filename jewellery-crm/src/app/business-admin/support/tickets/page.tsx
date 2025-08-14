@@ -91,7 +91,10 @@ export default function SupportTicketsPage() {
   const handleCreateTicket = async () => {
     try {
       setCreatingTicket(true);
-      const response = await apiService.createSupportTicket(newTicket);
+      const ticketData = {
+        ...newTicket,
+      };
+      const response = await apiService.createSupportTicket(ticketData);
       
       if (response.success) {
         setShowCreateModal(false);

@@ -4,6 +4,7 @@ import React, { useEffect } from 'react';
 import { NotificationProvider } from '@/hooks/useNotifications';
 import { NotificationManager } from '@/components/notifications';
 import { ThemeProvider } from './ThemeProvider';
+import { StoreProvider } from '@/contexts/StoreContext';
 import { useAuth } from '@/hooks/useAuth';
 
 // Auth Provider Component
@@ -38,9 +39,11 @@ export const AppProviders: React.FC<AppProvidersProps> = ({ children }) => {
   return (
     <ThemeProvider>
       <NotificationProvider>
-        <AuthProvider>
-          {children}
-        </AuthProvider>
+        <StoreProvider>
+          <AuthProvider>
+            {children}
+          </AuthProvider>
+        </StoreProvider>
         <NotificationManager />
       </NotificationProvider>
     </ThemeProvider>

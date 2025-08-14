@@ -125,13 +125,11 @@ export default function FloorManagerSupportPage() {
           priority: ticket.priority,
           category: ticket.category || 'general',
           customer: {
-            name: ticket.customer?.name || ticket.customer_name || 'Unknown Customer',
-            email: ticket.customer?.email || ticket.customer_email || 'N/A',
+            name: ticket.customer_name || 'Unknown Customer',
+            email: ticket.customer_email || 'N/A',
             avatar: ''
           },
-          assignedTo: ticket.assigned_to_member ? 
-            `${ticket.assigned_to_member.first_name} ${ticket.assigned_to_member.last_name}` : 
-            'Unassigned',
+          assignedTo: ticket.assigned_to_name || 'Unassigned',
           createdAt: ticket.created_at,
           lastUpdated: ticket.updated_at,
         }));
@@ -242,7 +240,7 @@ export default function FloorManagerSupportPage() {
       
       // Get assigned member name for notification
       const assignedMember = teamMembers.find(m => m.id === selectedAssignee);
-      const memberName = assignedMember ? `${assignedMember.first_name} ${assignedMember.last_name}` : 'Team Member';
+      const memberName = assignedMember ? (assignedMember.name || `${assignedMember.first_name || ''} ${assignedMember.last_name || ''}`.trim()) : 'Team Member';
       
       toast.success(`Ticket assigned to ${memberName}!`);
       
@@ -883,7 +881,7 @@ export default function FloorManagerSupportPage() {
               <SelectTrigger><SelectValue placeholder="Select team member" /></SelectTrigger>
               <SelectContent>
                 {teamMembers.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name}</SelectItem>
+                  <SelectItem key={m.id} value={m.id}>{m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim()}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

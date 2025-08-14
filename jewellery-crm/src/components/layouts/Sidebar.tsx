@@ -75,6 +75,7 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
         href: '/business-admin/dashboard',
         icon: Home,
       },
+
       {
         title: 'Customers',
         href: '/business-admin/customers',
@@ -86,9 +87,9 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
         icon: Package,
       },
       {
-        title: 'Orders',
-        href: '/business-admin/orders',
-        icon: ShoppingBag,
+        title: 'Sales',
+        href: '/business-admin/sales',
+        icon: TrendingUp,
       },
       {
         title: 'Appointments',
@@ -137,9 +138,9 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
         icon: Calendar,
       },
       {
-        title: 'Orders',
-        href: '/floor-manager/orders',
-        icon: ShoppingBag,
+        title: 'Sales',
+        href: '/floor-manager/sales',
+        icon: TrendingUp,
       },
       {
         title: 'Products',
@@ -176,11 +177,6 @@ const getNavigationItems = (userRole?: string): NavItem[] => {
         title: 'Appointments',
         href: '/sales/appointments',
         icon: Calendar,
-      },
-      {
-        title: 'Orders',
-        href: '/sales/orders',
-        icon: ShoppingBag,
       },
       {
         title: 'Products',

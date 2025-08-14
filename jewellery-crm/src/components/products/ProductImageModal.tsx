@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Package, Download, Share2 } from 'lucide-react';
-import { getProductImageUrl, getProductEmoji } from '@/lib/utils';
+import { getProductImage, getProductEmoji } from '@/lib/utils';
 
 interface Product {
   id: string;
@@ -43,7 +43,7 @@ export default function ProductImageModal({ product, open, onOpenChange }: Produ
     return status === 'active' ? 'default' : 'secondary';
   };
 
-  const imageUrl = getProductImageUrl(product);
+      const imageUrl = getProductImage(product);
   const productEmoji = getProductEmoji(product);
 
   return (

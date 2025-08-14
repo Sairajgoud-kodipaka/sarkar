@@ -9,8 +9,8 @@ CREATE TABLE public.announcement_replies (
   is_public boolean DEFAULT true,
   created_at timestamp with time zone DEFAULT now(),
   CONSTRAINT announcement_replies_pkey PRIMARY KEY (id),
-  CONSTRAINT announcement_replies_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id),
-  CONSTRAINT announcement_replies_announcement_id_fkey FOREIGN KEY (announcement_id) REFERENCES public.announcements(id)
+  CONSTRAINT announcement_replies_announcement_id_fkey FOREIGN KEY (announcement_id) REFERENCES public.announcements(id),
+  CONSTRAINT announcement_replies_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id)
 );
 CREATE TABLE public.announcements (
   id integer NOT NULL DEFAULT nextval('announcements_id_seq'::regclass),
@@ -24,8 +24,10 @@ CREATE TABLE public.announcements (
   expires_at timestamp with time zone,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT announcements_pkey PRIMARY KEY (id),
-  CONSTRAINT announcements_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id)
+  CONSTRAINT announcements_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id),
+  CONSTRAINT fk_announcements_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id)
 );
 CREATE TABLE public.appointments (
   id integer NOT NULL DEFAULT nextval('appointments_id_seq'::regclass),
@@ -41,15 +43,17 @@ CREATE TABLE public.appointments (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT appointments_pkey PRIMARY KEY (id),
-  CONSTRAINT appointments_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
-  CONSTRAINT appointments_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
+  CONSTRAINT fk_appointments_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
+  CONSTRAINT appointments_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
+  CONSTRAINT appointments_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
 );
 CREATE TABLE public.audit_logs (
   id integer NOT NULL DEFAULT nextval('audit_logs_id_seq'::regclass),
   table_name text NOT NULL,
-  record_id integer NOT NULL,
-  action text NOT NULL CHECK (action = ANY (ARRAY['create'::text, 'update'::text, 'delete'::text, 'restore'::text])),
+  record_id text NOT NULL,
+  action text NOT NULL CHECK (action = ANY (ARRAY['create'::text, 'update'::text, 'delete'::text, 'restore'::text, 'login'::text, 'logout'::text, 'export'::text, 'import'::text])),
   old_values jsonb,
   new_values jsonb,
   user_id uuid,
@@ -57,6 +61,7 @@ CREATE TABLE public.audit_logs (
   ip_address text,
   user_agent text,
   created_at timestamp with time zone DEFAULT now(),
+  additional_context jsonb,
   CONSTRAINT audit_logs_pkey PRIMARY KEY (id),
   CONSTRAINT audit_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES public.team_members(id)
 );
@@ -121,8 +126,10 @@ CREATE TABLE public.customers (
   next_follow_up date,
   summary_notes text,
   deleted_at timestamp with time zone,
+  store_id integer NOT NULL,
   CONSTRAINT customers_pkey PRIMARY KEY (id),
-  CONSTRAINT customers_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
+  CONSTRAINT customers_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
+  CONSTRAINT fk_customers_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id)
 );
 CREATE TABLE public.deals (
   id integer NOT NULL DEFAULT nextval('deals_id_seq'::regclass),
@@ -138,9 +145,11 @@ CREATE TABLE public.deals (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT deals_pkey PRIMARY KEY (id),
-  CONSTRAINT deals_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
-  CONSTRAINT deals_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
+  CONSTRAINT fk_deals_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
+  CONSTRAINT deals_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
+  CONSTRAINT deals_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
 );
 CREATE TABLE public.escalations (
   id integer NOT NULL DEFAULT nextval('escalations_id_seq'::regclass),
@@ -156,10 +165,25 @@ CREATE TABLE public.escalations (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT escalations_pkey PRIMARY KEY (id),
   CONSTRAINT escalations_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT fk_escalations_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
   CONSTRAINT escalations_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
   CONSTRAINT escalations_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id)
+);
+CREATE TABLE public.import_export_logs (
+  id integer NOT NULL DEFAULT nextval('import_export_logs_id_seq'::regclass),
+  operation_type character varying NOT NULL CHECK (operation_type::text = ANY (ARRAY['import'::character varying, 'export'::character varying]::text[])),
+  entity_type character varying NOT NULL CHECK (entity_type::text = ANY (ARRAY['customers'::character varying, 'products'::character varying]::text[])),
+  user_id uuid,
+  records_count integer,
+  success_count integer,
+  error_count integer,
+  errors jsonb,
+  created_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT import_export_logs_pkey PRIMARY KEY (id),
+  CONSTRAINT import_export_logs_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.kb_articles (
   id integer NOT NULL DEFAULT nextval('kb_articles_id_seq'::regclass),
@@ -172,8 +196,46 @@ CREATE TABLE public.kb_articles (
   author_id uuid,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT kb_articles_pkey PRIMARY KEY (id),
-  CONSTRAINT kb_articles_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.team_members(id)
+  CONSTRAINT kb_articles_author_id_fkey FOREIGN KEY (author_id) REFERENCES public.team_members(id),
+  CONSTRAINT fk_kb_articles_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id)
+);
+CREATE TABLE public.leads (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  customer_name character varying NOT NULL,
+  customer_phone character varying NOT NULL,
+  customer_email character varying,
+  product_interest text NOT NULL,
+  budget_range character varying NOT NULL,
+  stage character varying NOT NULL DEFAULT 'potential'::character varying CHECK (stage::text = ANY (ARRAY['potential'::character varying, 'demo'::character varying, 'proposal'::character varying, 'negotiation'::character varying, 'closed_won'::character varying, 'closed_lost'::character varying]::text[])),
+  floor integer NOT NULL,
+  assigned_to uuid,
+  notes text,
+  created_at timestamp with time zone DEFAULT now(),
+  last_updated timestamp with time zone DEFAULT now(),
+  store_id integer,
+  created_by uuid,
+  CONSTRAINT leads_pkey PRIMARY KEY (id),
+  CONSTRAINT leads_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(id),
+  CONSTRAINT leads_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id),
+  CONSTRAINT leads_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
+);
+CREATE TABLE public.notifications (
+  id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
+  user_id uuid NOT NULL,
+  title text NOT NULL,
+  message text NOT NULL,
+  type text NOT NULL DEFAULT 'custom'::text,
+  priority text NOT NULL DEFAULT 'medium'::text,
+  status text NOT NULL DEFAULT 'unread'::text,
+  link_url text,
+  tenant_id text,
+  store_id text,
+  is_persistent boolean NOT NULL DEFAULT false,
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  read_at timestamp with time zone,
+  CONSTRAINT notifications_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.order_items (
   id integer NOT NULL DEFAULT nextval('order_items_id_seq'::regclass),
@@ -184,7 +246,9 @@ CREATE TABLE public.order_items (
   unit_price numeric NOT NULL CHECK (unit_price >= 0::numeric),
   total_price numeric NOT NULL CHECK (total_price >= 0::numeric),
   created_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT order_items_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_order_items_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
   CONSTRAINT order_items_order_id_fkey FOREIGN KEY (order_id) REFERENCES public.orders(id),
   CONSTRAINT order_items_product_id_fkey FOREIGN KEY (product_id) REFERENCES public.products(id)
 );
@@ -199,9 +263,23 @@ CREATE TABLE public.orders (
   notes text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
-  CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
-  CONSTRAINT orders_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id)
+  CONSTRAINT fk_orders_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
+  CONSTRAINT orders_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id),
+  CONSTRAINT orders_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+);
+CREATE TABLE public.pipeline_stages (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  name character varying NOT NULL,
+  description text,
+  color character varying DEFAULT 'bg-blue-100'::character varying,
+  order_index integer NOT NULL DEFAULT 0,
+  is_active boolean DEFAULT true,
+  store_id integer,
+  created_at timestamp with time zone DEFAULT now(),
+  CONSTRAINT pipeline_stages_pkey PRIMARY KEY (id),
+  CONSTRAINT pipeline_stages_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(id)
 );
 CREATE TABLE public.products (
   id integer NOT NULL DEFAULT nextval('products_id_seq'::regclass),
@@ -219,7 +297,29 @@ CREATE TABLE public.products (
   image_url text,
   main_image_url text,
   additional_images_urls ARRAY,
-  CONSTRAINT products_pkey PRIMARY KEY (id)
+  cost_price numeric,
+  selling_price numeric,
+  discount_price numeric,
+  min_quantity integer DEFAULT 0,
+  max_quantity integer,
+  weight numeric,
+  dimensions character varying,
+  material character varying,
+  color character varying,
+  size character varying,
+  is_featured boolean DEFAULT false,
+  is_bestseller boolean DEFAULT false,
+  store integer,
+  scope character varying DEFAULT 'store'::character varying,
+  is_in_stock boolean DEFAULT true,
+  is_low_stock boolean DEFAULT false,
+  current_price numeric,
+  profit_margin numeric,
+  variant_count integer DEFAULT 1,
+  store_id integer NOT NULL,
+  CONSTRAINT products_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_products_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
+  CONSTRAINT products_store_fkey FOREIGN KEY (store) REFERENCES public.stores(id)
 );
 CREATE TABLE public.sales (
   id integer NOT NULL DEFAULT nextval('sales_id_seq'::regclass),
@@ -230,9 +330,32 @@ CREATE TABLE public.sales (
   floor integer NOT NULL CHECK (floor = ANY (ARRAY[1, 2, 3])),
   created_by uuid,
   created_at timestamp with time zone DEFAULT now(),
+  store_id integer NOT NULL,
   CONSTRAINT sales_pkey PRIMARY KEY (id),
   CONSTRAINT sales_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT fk_sales_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
   CONSTRAINT sales_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id)
+);
+CREATE TABLE public.sales_reports (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  floor_manager_id uuid NOT NULL,
+  floor integer NOT NULL,
+  week_start date NOT NULL,
+  week_end date NOT NULL,
+  total_leads integer NOT NULL DEFAULT 0,
+  converted_leads integer NOT NULL DEFAULT 0,
+  total_revenue numeric NOT NULL DEFAULT 0,
+  status character varying NOT NULL DEFAULT 'pending'::character varying CHECK (status::text = ANY (ARRAY['pending'::character varying, 'approved'::character varying, 'rejected'::character varying]::text[])),
+  submitted_at timestamp with time zone DEFAULT now(),
+  approved_at timestamp with time zone,
+  approved_by uuid,
+  rejection_reason text,
+  notes text,
+  store_id integer,
+  CONSTRAINT sales_reports_pkey PRIMARY KEY (id),
+  CONSTRAINT sales_reports_approved_by_fkey FOREIGN KEY (approved_by) REFERENCES public.team_members(id),
+  CONSTRAINT sales_reports_floor_manager_id_fkey FOREIGN KEY (floor_manager_id) REFERENCES public.team_members(id),
+  CONSTRAINT sales_reports_store_id_fkey FOREIGN KEY (store_id) REFERENCES public.stores(id)
 );
 CREATE TABLE public.stores (
   id integer NOT NULL DEFAULT nextval('stores_id_seq'::regclass),
@@ -273,10 +396,13 @@ CREATE TABLE public.support_tickets (
   floor integer CHECK (floor = ANY (ARRAY[1, 2, 3])),
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
+  category text NOT NULL DEFAULT 'general'::text,
+  store_id integer NOT NULL,
   CONSTRAINT support_tickets_pkey PRIMARY KEY (id),
   CONSTRAINT support_tickets_created_by_fkey FOREIGN KEY (created_by) REFERENCES public.team_members(id),
+  CONSTRAINT support_tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id),
   CONSTRAINT support_tickets_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
-  CONSTRAINT support_tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
+  CONSTRAINT fk_support_tickets_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id)
 );
 CREATE TABLE public.team_members (
   id uuid NOT NULL,
@@ -290,7 +416,10 @@ CREATE TABLE public.team_members (
   avatar text,
   created_at timestamp with time zone DEFAULT now(),
   updated_at timestamp with time zone DEFAULT now(),
-  CONSTRAINT team_members_pkey PRIMARY KEY (id)
+  employee_id text UNIQUE,
+  store_id integer NOT NULL,
+  CONSTRAINT team_members_pkey PRIMARY KEY (id),
+  CONSTRAINT fk_team_members_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id)
 );
 CREATE TABLE public.team_messages (
   id integer NOT NULL DEFAULT nextval('team_messages_id_seq'::regclass),
@@ -328,6 +457,13 @@ CREATE TABLE public.visits (
   date date NOT NULL,
   interest text NOT NULL,
   created_at timestamp with time zone DEFAULT now(),
+  entry_time timestamp with time zone DEFAULT now(),
+  exit_time timestamp with time zone,
+  status text DEFAULT 'active'::text CHECK (status = ANY (ARRAY['active'::text, 'waiting'::text, 'browsing'::text, 'completed'::text, 'left'::text])),
+  assigned_to uuid,
+  store_id integer NOT NULL,
   CONSTRAINT visits_pkey PRIMARY KEY (id),
-  CONSTRAINT visits_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id)
+  CONSTRAINT visits_customer_id_fkey FOREIGN KEY (customer_id) REFERENCES public.customers(id),
+  CONSTRAINT fk_visits_store_id FOREIGN KEY (store_id) REFERENCES public.stores(id),
+  CONSTRAINT visits_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES public.team_members(id)
 );

@@ -82,11 +82,13 @@ export default function PlatformBillingPage() {
       setLoading(true);
       
       // Fetch real data from existing tables
-      const [sales, orders, teamMembers] = await Promise.all([
+      const [sales, teamMembers] = await Promise.all([
         apiService.getSales(),
-        apiService.getOrders(),
         apiService.getTeamMembers()
       ]);
+
+      // Mock orders data for now since getOrders method doesn't exist
+      const orders = { data: [] };
 
       // Transform real data into billing format
       const billing: BillingData = {

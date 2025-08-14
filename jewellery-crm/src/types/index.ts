@@ -424,74 +424,87 @@ export interface Appointment {
 }
 
 // ================================
-// ORDER MANAGEMENT TYPES
+// SALES PIPELINE TYPES
 // ================================
 
 /**
- * Order status for both online and offline orders
+ * Lead stage for sales pipeline
  */
-export type OrderStatus = 'pending' | 'confirmed' | 'processing' | 'ready' | 'shipped' | 'delivered' | 'cancelled' | 'refunded';
+export type LeadStage = 'potential' | 'demo' | 'proposal' | 'negotiation' | 'closed_won' | 'closed_lost';
 
 /**
- * Order information
+ * Lead interface for tracking customer interest
  */
-export interface Order {
+export interface Lead {
   id: string;
-  orderNumber: string;
-  tenantId: string;
-  customerId: string;
-  storeId?: string; // For offline orders
-  
-  // Order details
-  status: OrderStatus;
-  type: 'online' | 'offline';
-  
-  // Items
-  items: OrderItem[];
-  
-  // Pricing
-  subtotal: number;
-  taxAmount: number;
-  discountAmount: number;
-  shippingAmount: number;
-  totalAmount: number;
-  
-  // Addresses
-  billingAddress: Address;
-  shippingAddress?: Address;
-  
-  // Payment
-  paymentMethod: string;
-  paymentStatus: 'pending' | 'paid' | 'failed' | 'refunded';
-  paymentTransactionId?: string;
-  
-  // Delivery
-  expectedDeliveryDate?: Date;
-  deliveredAt?: Date;
-  trackingNumber?: string;
-  
-  // Notes
-  customerNotes?: string;
-  internalNotes?: string;
-  
-  // Metadata
-  createdAt: Date;
-  updatedAt: Date;
-  createdBy: string;
+  customer_name: string;
+  customer_phone: string;
+  customer_email?: string;
+  product_interest: string;
+  budget_range: string;
+  stage: LeadStage;
+  floor: number;
+  assigned_to?: string;
+  assigned_to_name?: string;
+  notes?: string;
+  created_at: string;
+  last_updated: string;
+  store_id?: number;
+  created_by?: string;
 }
 
 /**
- * Individual order item
+ * Sales report interface for weekly reports from floor managers
  */
-export interface OrderItem {
+export interface SalesReport {
   id: string;
-  productId: string;
-  variantId?: string;
-  quantity: number;
-  unitPrice: number;
-  totalPrice: number;
-  customizations?: string;
+  floor_manager_id: string;
+  floor_manager_name: string;
+  floor: number;
+  week_start: string;
+  week_end: string;
+  total_leads: number;
+  converted_leads: number;
+  total_revenue: number;
+  status: 'pending' | 'approved' | 'rejected';
+  submitted_at: string;
+  approved_at?: string;
+  approved_by?: string;
+  rejection_reason?: string;
   notes?: string;
+  store_id?: number;
+}
+
+/**
+ * Sale interface for completed sales transactions
+ */
+export interface Sale {
+  id: string;
+  lead_id?: string;
+  customer_name: string;
+  product_sold: string;
+  sale_amount: number;
+  sale_date: string;
+  commission: number;
+  notes?: string;
+  salesperson_id?: string;
+  floor: number;
+  store_id?: number;
+  created_at: string;
+}
+
+/**
+ * Pipeline stage interface for configurable sales stages
+ */
+export interface PipelineStage {
+  id: string;
+  name: string;
+  description?: string;
+  color: string;
+  order_index: number;
+  is_active: boolean;
+  store_id?: number;
+  created_at: string;
 }
 
 // ================================
@@ -822,7 +835,7 @@ export interface TeamMember {
   last_name?: string;
   email: string;
   phone?: string;
-  role: 'floor_manager' | 'sales_associate' | 'support_staff' | 'admin' | 'inhouse_sales' | 'marketing' | 'tele_caller' | 'manager' | 'sales' | 'support';
+  role: 'floor_manager' | 'sales_associate' | 'support_staff' | 'admin' | 'inhouse_sales' | 'marketing' | 'tele_caller' | 'manager' | 'sales' | 'support' | 'business_admin';
   floor?: string | number;
   status: 'active' | 'inactive' | 'on_leave' | 'present' | 'absent';
   avatar?: string;
@@ -895,7 +908,7 @@ export interface AuditLogSummary {
 /**
  * Sale interface for sales tracking
  */
-export interface Sale {
+export interface SaleRecord {
   id: number;
   customer_id: number;
   customer_name: string;
@@ -940,7 +953,7 @@ export interface FloorData {
   floor: number;
   customers: Customer[];
   visits: Visit[];
-  sales: Sale[];
+  sales: SaleRecord[];
 }
 
 /**

@@ -164,8 +164,8 @@ export function StoreManagerDashboard() {
     router.push('/manager/analytics');
   };
 
-  const navigateToOrders = () => {
-    router.push('/manager/orders');
+  const navigateToSales = () => {
+    router.push('/business-admin/sales');
   };
 
   const navigateToReports = () => {
@@ -915,9 +915,9 @@ export function StoreManagerDashboard() {
             <span className="text-xs">Sales Analytics</span>
           </Button>
           
-          <Button variant="outline" className="h-20 flex-col space-y-2" onClick={navigateToOrders}>
-            <ShoppingBag className="w-5 h-5" />
-            <span className="text-xs">Process Order</span>
+          <Button variant="outline" className="h-20 flex-col space-y-2" onClick={navigateToSales}>
+            <TrendingUp className="w-5 h-5" />
+            <span className="text-xs">Sales Pipeline</span>
           </Button>
         </div>
       </CardContainer>

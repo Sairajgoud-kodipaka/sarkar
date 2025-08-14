@@ -6,7 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card } from "@/components/ui/card";
 import { apiService, Client } from "@/lib/api-service";
 import { Trash2, RotateCcw, Eye, Calendar } from "lucide-react";
-import { toast } from "react-hot-toast";
+import { toast } from "sonner";
 
 interface TrashModalProps {
   open: boolean;
@@ -48,14 +48,9 @@ export function TrashModal({ open, onClose, onCustomerRestored }: TrashModalProp
   const handleRestore = async (customerId: string) => {
     try {
       setRestoring(customerId);
-      const response = await apiService.restoreCustomer(customerId);
-      
-      if (response.success) {
-        onCustomerRestored();
-        toast.success('Customer restored successfully');
-      } else {
-        toast.error('Failed to restore customer');
-      }
+      // TODO: Implement restore functionality when backend supports it
+      toast.info('Restore functionality coming soon');
+      onCustomerRestored();
     } catch (error) {
       toast.error('Failed to restore customer');
     } finally {

@@ -43,6 +43,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useAuth } from '@/hooks/useAuth';
 import { NotificationBell } from '@/components/notifications';
+import StoreSelector from '@/components/ui/StoreSelector';
 import { useTheme } from '@/components/providers/ThemeProvider';
 
 interface HeaderProps {
@@ -183,6 +184,11 @@ export function Header({
 
         {/* Right Section */}
         <div className="flex items-center space-x-1 sm:space-x-2">
+          {/* Store Selector */}
+          <div className="hidden md:block">
+            <StoreSelector />
+          </div>
+
           {/* Notifications */}
           <NotificationBell />
 

@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogD
 import { Search, Download, Upload, Plus, Filter, MoreHorizontal, Eye, Edit, Trash2, UserPlus } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 import { useAuth } from '@/hooks/useAuth';
+import { useStoreContext } from '@/contexts/StoreContext';
 import AddCustomerModal from '@/components/customers/AddCustomerModal';
 import { ImportModal } from '@/components/customers/ImportModal';
 import { ExportModal } from '@/components/customers/ExportModal';
@@ -39,6 +40,7 @@ interface Customer {
 
 export default function CustomersPage() {
   const { user } = useAuth();
+  const { currentStore, currentStoreData } = useStoreContext();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +95,7 @@ export default function CustomersPage() {
 
   useEffect(() => {
     fetchCustomers();
-  }, [currentPage, searchTerm, statusFilter, floorFilter]);
+  }, [currentPage, searchTerm, statusFilter, floorFilter, currentStore]);
 
   const fetchCustomers = async () => {
     try {
@@ -242,7 +244,14 @@ export default function CustomersPage() {
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-3xl font-bold text-text-primary tracking-tight">Customers</h1>
-          <p className="text-text-secondary mt-1">Manage your customer relationships and interactions</p>
+          <p className="text-text-secondary mt-1">
+            Manage your customer relationships and interactions
+            {currentStoreData && (
+              <span className="ml-2 text-blue-600 font-medium">
+                • {currentStoreData.name}
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex items-center gap-3">
           <Button 
@@ -281,6 +290,9 @@ export default function CustomersPage() {
               <div>
                 <p className="text-sm font-medium text-text-secondary">Total Customers</p>
                 <p className="text-2xl font-bold text-text-primary">{customers.length || 0}</p>
+                {currentStoreData && (
+                  <p className="text-xs text-blue-600 mt-1">{currentStoreData.name} only</p>
+                )}
               </div>
               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
                 <span className="text-blue-600 text-sm font-semibold">👥</span>

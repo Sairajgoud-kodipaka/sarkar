@@ -56,8 +56,8 @@ export default function FloorManagerDashboard() {
       setError(null);
       
       try {
-        // Get floor number from currentFloor
-        const floorNumber = parseInt(currentFloor.id);
+        // Extract floor number from floor ID (e.g., "floor-1" -> 1)
+        const floorNumber = parseInt(currentFloor.id.replace('floor-', ''));
         
         // Fetch real data from Supabase
         const response = await apiService.getFloorDashboardStats(floorNumber);

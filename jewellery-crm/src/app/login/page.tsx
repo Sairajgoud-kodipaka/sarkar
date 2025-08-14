@@ -27,6 +27,12 @@ export default function LoginPage() {
   const [isRetrying, setIsRetrying] = useState(false);
 
   const isRedirectingRef = useRef(false);
+  const routerRef = useRef(router);
+
+  // Update router ref when router changes
+  useEffect(() => {
+    routerRef.current = router;
+  }, [router]);
 
   useEffect(() => {
     if (user && !isRedirectingRef.current) {
@@ -37,16 +43,18 @@ export default function LoginPage() {
       
       // Redirect to role-based route
       if (userRole === 'business_admin') {
-        router.push('/business-admin/dashboard');
+        routerRef.current.push('/business-admin/dashboard');
       } else if (userRole === 'floor_manager') {
-        router.push('/floor-manager/dashboard');
+        routerRef.current.push('/floor-manager/dashboard');
       } else if (userRole === 'sales') {
-        router.push('/sales/dashboard');
+        routerRef.current.push('/sales/dashboard');
       } else {
-        router.push('/platform/dashboard');
+        // Don't redirect if no role - stay on login page
+        setLoginError('No role assigned. Please contact admin.');
+        return;
       }
     }
-  }, [user, router]);
+  }, [user]); // Removed router from dependencies
 
   // Cleanup on unmount
   useEffect(() => {

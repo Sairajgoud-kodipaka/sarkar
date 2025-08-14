@@ -7,9 +7,9 @@ export function cn(...inputs: ClassValue[]) {
 
 /**
  * Get the display image URL for a product
- * Only returns actual uploaded images from Supabase, no placeholders
+ * Returns actual uploaded images from Supabase storage
  */
-export function getProductImage(product: any): string {
+export function getProductImage(product: any): string | null {
   // Check if product has an uploaded image
   if (product.image && product.image !== 'null' && product.image !== '') {
     return product.image;
@@ -25,8 +25,8 @@ export function getProductImage(product: any): string {
     return product.image_url;
   }
 
-  // Return default image if no image is available
-  return '/placeholder-product.jpg';
+  // Return null if no image is available - no placeholders
+  return null;
 }
 
 /**

@@ -98,7 +98,7 @@ export default function StockTransferModal({ isOpen, onClose, onSuccess }: Stock
         setTransfers(transfersData);
       }
 
-      // Fetch products - Get global catalogue for transfer requests
+      // Fetch products for transfer requests
       const productsResponse = await apiService.getProducts();
       if (productsResponse.success && productsResponse.data) {
         let productsData: any[] = [];

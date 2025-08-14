@@ -126,7 +126,8 @@ export default function FloorManagerCustomersPage() {
       setLoading(true);
       setError(null);
       
-      const floorNumber = parseInt(currentFloor.id);
+      // Extract floor number from floor ID (e.g., "floor-1" -> 1)
+      const floorNumber = parseInt(currentFloor.id.replace('floor-', ''));
       const response = await apiService.getFloorCustomers(floorNumber);
       
       if (response.success) {

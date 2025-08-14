@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -12,24 +12,30 @@ interface AuthWrapperProps {
 export function AuthWrapper({ children, requiredRole }: AuthWrapperProps) {
   const { user, isLoading, isHydrated } = useAuth();
   const router = useRouter();
+  const hasRedirected = useRef(false);
 
   useEffect(() => {
-    if (isHydrated && !isLoading) {
-      if (!user) {
-        router.push('/login');
+    // Only run once when auth is ready and prevent multiple redirects
+    if (hasRedirected.current || !isHydrated || isLoading) {
+      return;
+    }
+
+    if (!user) {
+      hasRedirected.current = true;
+      window.location.href = '/login';
+      return;
+    }
+
+    if (requiredRole) {
+      const userRole = user.user_metadata?.role;
+      const requiredList = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
+      if (!userRole || !requiredList.includes(userRole)) {
+        hasRedirected.current = true;
+        window.location.href = '/login';
         return;
       }
-
-      if (requiredRole) {
-        const userRole = user.user_metadata?.role;
-        const requiredList = Array.isArray(requiredRole) ? requiredRole : [requiredRole];
-        if (!userRole || !requiredList.includes(userRole)) {
-          router.push('/login');
-          return;
-        }
-      }
     }
-  }, [user, isLoading, isHydrated, requiredRole, router]);
+  }, [user, isLoading, isHydrated, requiredRole]);
 
   // Show loading while auth is initializing
   if (isLoading || !isHydrated) {

@@ -104,7 +104,7 @@ export default function SupportPage() {
   // Assign Modal state
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [assignTicketId, setAssignTicketId] = useState<string | null>(null);
-  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; first_name: string; last_name: string }>>([]);
+  const [teamMembers, setTeamMembers] = useState<Array<{ id: string; first_name: string; last_name: string; name: string }>>([]);
   const [selectedAssignee, setSelectedAssignee] = useState<string>('');
 
   // Fetch support data
@@ -302,7 +302,12 @@ export default function SupportPage() {
     setIsAssignModalOpen(true);
     try {
       const members = await apiService.getTeamMembers();
-      setTeamMembers(members.map((m: any) => ({ id: m.id, first_name: m.first_name, last_name: m.last_name })));
+      setTeamMembers(members.map((m: any) => ({ 
+        id: m.id, 
+        first_name: m.first_name, 
+        last_name: m.last_name,
+        name: m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim()
+      })));
     } catch (e) {
       console.error('Failed to load team members', e);
       setTeamMembers([]);
@@ -863,7 +868,7 @@ export default function SupportPage() {
               <SelectTrigger><SelectValue placeholder="Select team member" /></SelectTrigger>
               <SelectContent>
                 {teamMembers.map((m) => (
-                  <SelectItem key={m.id} value={m.id}>{m.first_name} {m.last_name}</SelectItem>
+                  <SelectItem key={m.id} value={m.id}>{m.name || `${m.first_name || ''} ${m.last_name || ''}`.trim()}</SelectItem>
                 ))}
               </SelectContent>
             </Select>

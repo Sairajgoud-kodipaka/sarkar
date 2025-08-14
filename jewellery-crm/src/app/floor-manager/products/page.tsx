@@ -184,16 +184,7 @@ export default function FloorManagerProductsPage() {
     setImageModalOpen(true);
   };
 
-  const handleViewGlobalCatalogue = async () => {
-    try {
-      const response = await apiService.getGlobalCatalogue();
-      if (response.success) {
-        setGlobalCatalogue(response.data);
-        setShowGlobalCatalogue(true);
-      }
-    } catch (error) {
-    }
-  };
+
 
   // Calculate statistics
   const stats = {
@@ -245,10 +236,6 @@ export default function FloorManagerProductsPage() {
           <Button variant="outline" onClick={() => setIsImportModalOpen(true)}>
             <Package className="w-4 h-4 mr-2" />
             Import
-          </Button>
-          <Button variant="outline" onClick={handleViewGlobalCatalogue}>
-            <Globe className="w-4 h-4 mr-2" />
-            Global Catalogue
           </Button>
           <Button onClick={handleAddProduct}>
           <Plus className="w-4 h-4 mr-2" />
@@ -379,12 +366,12 @@ export default function FloorManagerProductsPage() {
         {products.map((product) => (
           <Card key={product.id} className="overflow-hidden hover:shadow-lg transition-shadow">
             <div className="aspect-square relative bg-gray-100">
-              {product.image_url ? (
+              {getProductImage(product) ? (
                 <img
-                  src={getProductImage(product.image_url)}
+                  src={getProductImage(product)!}
                   alt={product.name}
                   className="w-full h-full object-cover cursor-pointer"
-                  onClick={() => handleImageClick(getProductImage(product.image_url!))}
+                  onClick={() => handleImageClick(getProductImage(product)!)}
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center text-6xl">

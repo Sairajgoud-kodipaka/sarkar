@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Search, Plus, Filter, MoreHorizontal, Package, Tag, TrendingUp, Eye, Edit, Trash2, X, Store, Globe, Upload, Download } from 'lucide-react';
+import { Search, Plus, Filter, MoreHorizontal, Package, Tag, TrendingUp, Eye, Edit, Trash2, X, Store, Upload, Download, Globe } from 'lucide-react';
 import { apiService } from '@/lib/api-service';
 import { 
   DropdownMenu,
@@ -94,8 +94,7 @@ export default function ProductsPage() {
   const [selectedAction, setSelectedAction] = useState<'view' | 'edit' | 'delete' | null>(null);
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
   const [imageModalOpen, setImageModalOpen] = useState(false);
-  const [globalCatalogue, setGlobalCatalogue] = useState<any>(null);
-  const [showGlobalCatalogue, setShowGlobalCatalogue] = useState(false);
+
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
   
   // Get user scope for scoped visibility
@@ -185,16 +184,7 @@ export default function ProductsPage() {
     }
   };
 
-  const fetchGlobalCatalogue = async () => {
-    try {
-      const response = await apiService.getGlobalCatalogue();
-      if (response.success && response.data) {
-        setGlobalCatalogue(response.data);
-      }
-    } catch (error) {
-      // console.error('Error fetching global catalogue:', error);
-    }
-  };
+
 
   const getStatusBadgeVariant = (status: string) => {
     switch (status) {
@@ -358,49 +348,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Global Catalogue View */}
-      {showGlobalCatalogue && globalCatalogue && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Globe className="w-5 h-5" />
-              Global Catalogue Overview
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold">{globalCatalogue.total_products || 0}</div>
-                <div className="text-sm text-muted-foreground">Total Products</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">{globalCatalogue.stores_count || 0}</div>
-                <div className="text-sm text-muted-foreground">Stores</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold">
-                  {globalCatalogue.catalogue?.length || 0}
-            </div>
-                <div className="text-sm text-muted-foreground">Product Types</div>
-              </div>
-            </div>
-            
-            {globalCatalogue.catalogue && globalCatalogue.catalogue.length > 0 && (
-              <div className="space-y-2">
-                <h4 className="font-semibold">Product Distribution:</h4>
-                {globalCatalogue.catalogue.slice(0, 10).map((item: any, index: number) => (
-                  <div key={index} className="flex justify-between items-center p-2 bg-muted rounded">
-                    <span className="font-medium">{item.product_name}</span>
-                    <span className="text-sm text-muted-foreground">
-                      {item.total_quantity} units across {item.inventory_by_store?.length || 0} stores
-                    </span>
-              </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
+
 
       {/* Filters */}
       <Card>

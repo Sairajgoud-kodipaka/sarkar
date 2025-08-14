@@ -35,7 +35,7 @@ export const useScopedVisibility = (): ScopedVisibilityConfig => {
   // Determine user scope based on role
   let userScope: UserScope;
   
-  if (user.role === 'platform_admin' || user.role === 'business_admin') {
+  if (user.role === 'business_admin') {
     userScope = {
       type: 'all',
       filters: {},
@@ -62,9 +62,9 @@ export const useScopedVisibility = (): ScopedVisibilityConfig => {
   }
 
   return {
-    canAccessAllData: user.role === 'platform_admin' || user.role === 'business_admin',
-    canAccessStoreData: ['manager', 'platform_admin', 'business_admin'].includes(user.role as string),
-    canAccessOwnData: ['inhouse_sales', 'tele_calling', 'manager', 'platform_admin', 'business_admin'].includes(user.role as string),
+    canAccessAllData: user.role === 'business_admin',
+    canAccessStoreData: ['business_admin'].includes(user.role as string),
+    canAccessOwnData: ['business_admin'].includes(user.role as string),
     userScope
   };
 };

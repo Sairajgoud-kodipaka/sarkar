@@ -15,9 +15,11 @@ interface ExportModalProps {
 }
 
 export default function ExportModal({ isOpen, onClose, onSuccess }: ExportModalProps) {
+  const [exportType, setExportType] = useState<'basic' | 'branded'>('branded');
   const [format, setFormat] = useState('csv');
   const [exporting, setExporting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dataTypes, setDataTypes] = useState<string[]>(['products']);
   const [selectedFields, setSelectedFields] = useState<string[]>([
     'name',
     'sku',
@@ -26,6 +28,28 @@ export default function ExportModal({ isOpen, onClose, onSuccess }: ExportModalP
     'quantity',
     'status'
   ]);
+
+  const dataTypeOptions = [
+    { key: 'products', label: 'Products', description: 'All product information with images' },
+    { key: 'customers', label: 'Customers', description: 'Customer profiles and preferences' },
+    { key: 'orders', label: 'Orders', description: 'Order history and details' }
+  ];
+
+  const handleDataTypeToggle = (dataType: string) => {
+    setDataTypes(prev => 
+      prev.includes(dataType) 
+        ? prev.filter(type => type !== dataType)
+        : [...prev, dataType]
+    );
+  };
+
+  const handleSelectAllDataTypes = () => {
+    setDataTypes(dataTypeOptions.map(option => option.key));
+  };
+
+  const handleDeselectAllDataTypes = () => {
+    setDataTypes([]);
+  };
 
   const availableFields = [
     { key: 'name', label: 'Product Name' },
@@ -87,6 +111,12 @@ export default function ExportModal({ isOpen, onClose, onSuccess }: ExportModalP
     try {
       setExporting(true);
       setError(null);
+
+      // Debug: Check apiService methods
+      console.log('apiService object:', apiService);
+      console.log('apiService methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(apiService)));
+      console.log('exportAllDataBranded exists:', typeof apiService.exportAllDataBranded);
+      console.log('testMethod exists:', typeof apiService.testMethod);
 
       const response = await apiService.exportProducts({
         format,

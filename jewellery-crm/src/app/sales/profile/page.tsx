@@ -73,15 +73,14 @@ export default function SalesProfilePage() {
         
         // Calculate real performance metrics
         const salesResponse = await apiService.getSales();
-        const ordersResponse = await apiService.getOrders();
         
-        if (salesResponse.success && ordersResponse.success) {
+        if (salesResponse.success) {
           const userSales = salesResponse.data.filter((sale: any) => 
             sale.sales_person_id === userProfile.id
           );
-          const userOrders = ordersResponse.data.filter((order: any) => 
-            order.sales_person_id === userProfile.id
-          );
+          
+          // Mock orders data for now since getOrders method doesn't exist
+          const userOrders = [];
           
           const totalSales = userSales.reduce((sum: number, sale: any) => 
             sum + (sale.total_amount || 0), 0

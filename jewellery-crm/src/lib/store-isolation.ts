@@ -46,7 +46,7 @@ export const useStoreIsolation = (): StoreIsolationConfig => {
   const currentStoreId = (user as any)?.storeId || (user as any)?.store;
   
   // Determine access levels based on role
-  const canAccessAllStores = ['platform_admin', 'business_admin'].includes(userRole);
+  const canAccessAllStores = userRole ? ['business_admin'].includes(userRole) : false;
   const canAccessCurrentStore = currentStoreId || canAccessAllStores;
   
   // Create store filter for API calls
@@ -54,7 +54,7 @@ export const useStoreIsolation = (): StoreIsolationConfig => {
 
   return {
     currentStoreId,
-    userRole,
+    userRole: userRole || 'unknown',
     canAccessAllStores,
     canAccessCurrentStore,
     storeFilter
@@ -102,8 +102,8 @@ export const canAccessStoreData = (
   userStoreId: string | null,
   userRole: string
 ): boolean => {
-  // Platform and business admins can access all stores
-  if (['platform_admin', 'business_admin'].includes(userRole)) {
+      // Business admins can access all stores
+    if (['business_admin'].includes(userRole)) {
     return true;
   }
 
@@ -142,8 +142,8 @@ export const validateStoreAccess = (
   userStoreId: string | null,
   userRole: string
 ): { allowed: boolean; reason?: string } => {
-  // Platform and business admins can perform all actions on all stores
-  if (['platform_admin', 'business_admin'].includes(userRole)) {
+      // Business admins can perform all actions on all stores
+    if (['business_admin'].includes(userRole)) {
     return { allowed: true };
   }
 
@@ -193,8 +193,8 @@ export const createStoreAwareFormData = <T extends Record<string, any>>(
   storeId: string | null,
   userRole: string
 ): T & { store_id?: string } => {
-  // Platform and business admins can choose store
-  if (['platform_admin', 'business_admin'].includes(userRole)) {
+      // Business admins can choose store
+    if (['business_admin'].includes(userRole)) {
     return formData;
   }
 
@@ -300,7 +300,7 @@ export const getStoreStatistics = (
   storeId: string | null,
   userRole: string
 ): Record<string, number> => {
-  if (['platform_admin', 'business_admin'].includes(userRole)) {
+  if (['business_admin'].includes(userRole)) {
     // Admins see all data
     return {
       total: data.length,

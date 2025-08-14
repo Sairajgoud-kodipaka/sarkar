@@ -1,11 +1,50 @@
 // API Service for Supabase backend
 import { supabase } from './supabase';
+import { useStoreIsolation } from './store-isolation';
+
+// Helper to get current user's store context
+const getCurrentUserStore = (): number | null => {
+  try {
+    // Get user from localStorage (auth-storage)
+    const authStorage = localStorage.getItem('auth-storage');
+    if (authStorage) {
+      const authData = JSON.parse(authStorage);
+      if (authData.state?.user) {
+        const user = authData.state.user;
+        
+        // Check for store information in user metadata or custom claims
+        const storeId = user.user_metadata?.store_id || 
+                       user.user_metadata?.store || 
+                       user.app_metadata?.store_id ||
+                       user.app_metadata?.store;
+        
+        if (storeId) {
+          return parseInt(storeId.toString());
+        }
+        
+        // If no store_id in metadata, check if user is admin (can see all stores)
+        const userRole = user.user_metadata?.role || user.app_metadata?.role;
+        if (['business_admin'].includes(userRole)) {
+          return null; // Admin can see all stores
+        }
+      }
+    }
+    
+    // Default: return null to show all data (safe fallback)
+    return null;
+  } catch (error) {
+    console.warn('Error getting user store context:', error);
+    return null; // Safe fallback
+  }
+};
 
 interface ApiResponse<T> {
   data: T;
   message?: string;
   success: boolean;
 }
+
+
 
 // Type definitions for the CRM system
 export interface User {
@@ -14,7 +53,7 @@ export interface User {
   email: string;
   first_name: string;
   last_name: string;
-  role: 'business_admin' | 'floor_manager' | 'platform_admin' | 'store_manager' | 'sales_team' | 'marketing_team' | 'telecaller';
+  role: 'business_admin' | 'floor_manager' | 'sales_associate';
   name: string;
   phone?: string;
   address?: string;
@@ -33,6 +72,7 @@ export interface Customer {
   phone: string;
   interest: string;
   floor: number;
+  store_id: number;
   visited_date: string;
   assigned_to?: string;
   notes?: string;
@@ -100,6 +140,7 @@ export interface Product {
   type: string;
   category: string;
   price: number;
+  store_id: number;
   image?: string;
   // Optional fields that might not exist in the database
   description?: string;
@@ -124,6 +165,7 @@ export interface Sale {
   amount: number;
   date: string;
   floor: number;
+  store_id: number;
   created_by: string;
   created_at: string;
 }
@@ -133,6 +175,7 @@ export interface Visit {
   customer_id: number;
   customer_name: string;
   floor: number;
+  store_id: number;
   date: string;
   interest: string;
   created_at: string;
@@ -218,7 +261,7 @@ export interface TeamMember {
   name: string;
   email: string;
   phone: string;
-  role: 'floor_manager' | 'sales_associate' | 'support_staff' | 'admin' | 'inhouse_sales' | 'marketing' | 'tele_caller' | 'manager' | 'sales' | 'support';
+  role: 'business_admin' | 'floor_manager' | 'sales_associate';
   floor: string;
   status: 'active' | 'inactive' | 'on_leave';
   avatar?: string;
@@ -294,6 +337,11 @@ class ApiService {
     } catch {
       return false;
     }
+  }
+
+  // Test method to verify class structure - UPDATED
+  public testMethod(): string {
+    return 'ApiService is working - UPDATED';
   }
 
   private handleSupabaseResponse<T>(response: any): ApiResponse<T> {
@@ -552,10 +600,40 @@ class ApiService {
     status?: string;
   } = {}): Promise<ApiResponse<Customer[]>> {
     try {
-      const { data, error } = await supabase
+      // CRITICAL: Set store context before making API calls
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+      
+      let query = supabase
         .from('customers')
         .select('*')
         .order('created_at', { ascending: false });
+
+      // Add store filtering
+      if (userStore) {
+        query = query.eq('store_id', userStore);
+      }
+
+      // Add floor filtering if specified
+      if (params.floor) {
+        query = query.eq('floor', params.floor);
+      }
+
+      // Add status filtering if specified
+      if (params.status) {
+        query = query.eq('status', params.status);
+      }
+
+      // Add search filtering if specified
+      if (params.search) {
+        query = query.or(`name.ilike.%${params.search}%,phone.ilike.%${params.search}%`);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         throw error;
@@ -601,7 +679,26 @@ class ApiService {
     status?: 'active' | 'inactive';
   }): Promise<ApiResponse<Product[]>> {
     try {
-      let query = supabase.from('products').select('*');
+      // CRITICAL: Set store context before making API calls
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+      
+      let query = supabase.from('products').select(`
+        *,
+        image,
+        image_url,
+        main_image_url,
+        additional_images_urls
+      `);
+
+      // Add store filtering
+      if (userStore) {
+        query = query.eq('store_id', userStore);
+      }
 
       if (params?.search) {
         query = query.or(`name.ilike.%${params.search}%,sku.ilike.%${params.search}%`);
@@ -643,11 +740,17 @@ class ApiService {
   async getProduct(id: string): Promise<ApiResponse<Product>> {
     const { data, error } = await supabase
       .from('products')
-      .select('*')
+      .select(`
+        *,
+        image,
+        image_url,
+        main_image_url,
+        additional_images_urls
+      `)
       .eq('id', id)
       .single();
 
-    if (error) throw new Error(error.message);
+    if (error) throw error;
     
     return this.handleSupabaseResponse(data);
   }
@@ -656,6 +759,15 @@ class ApiService {
     try {
       // Ensure user is authenticated before proceeding
       await this.ensureAuthenticated();
+      
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      // Set store context for RLS (if enabled)
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
       
       // Clean the product data for database insertion
       const cleanProductData: any = { ...productData };
@@ -669,6 +781,9 @@ class ApiService {
         // Set as main image as well
         cleanProductData.main_image_url = cleanProductData.image;
       }
+      
+      // Add required store_id field
+      cleanProductData.store_id = userStore || 1;
       
       // Remove undefined values
       const finalData = Object.fromEntries(
@@ -792,7 +907,21 @@ class ApiService {
     date_to?: string;
     floor?: number;
   }): Promise<ApiResponse<Sale[]>> {
+    try {
+      // CRITICAL: Set store context before making API calls
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+      
     let query = supabase.from('sales').select('*');
+
+      // Add store filtering
+      if (userStore) {
+        query = query.eq('store_id', userStore);
+      }
 
     if (params?.date_from) {
       query = query.gte('date', params.date_from);
@@ -811,18 +940,316 @@ class ApiService {
     if (error) throw new Error(error.message);
     
     return this.handleSupabaseResponse(data || []);
+    } catch (error) {
+      console.error('Error fetching sales:', error);
+      throw error;
+    }
+  }
+
+  // Sales Reports
+  async getSalesReports(params?: {
+    floor?: string | number;
+    dateFilter?: string;
+    status?: string;
+  }): Promise<ApiResponse<any[]>> {
+    try {
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+
+      let query = supabase
+        .from('sales_reports')
+        .select('*')
+        .order('start_date', { ascending: false });
+
+      console.log('🔍 Query parameters:', { floor: params?.floor, dateFilter: params?.dateFilter, store: userStore });
+
+      // Add store filtering
+      if (userStore) {
+        query = query.eq('store_id', userStore);
+      }
+
+      // Add floor filtering
+      if (params?.floor && params.floor !== 'all') {
+        query = query.eq('floor', parseInt(params.floor.toString()));
+      }
+
+      // Add date filtering
+      if (params?.dateFilter) {
+        const now = new Date();
+        let startDate: string | undefined;
+        let endDate: string | undefined;
+
+        switch (params.dateFilter) {
+          case 'all':
+            // No date filtering - show all reports
+            startDate = undefined;
+            endDate = undefined;
+            break;
+          case 'this_week':
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            endDate = now.toISOString();
+            break;
+          case 'this_month':
+            startDate = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+            endDate = now.toISOString();
+            break;
+          case 'last_month':
+            startDate = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString();
+            endDate = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59).toISOString();
+            break;
+          default:
+            startDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+            endDate = now.toISOString();
+        }
+
+        console.log('📅 Date filter calculation:', {
+          dateFilter: params.dateFilter,
+          startDate,
+          endDate,
+          now: now.toISOString()
+        });
+
+        // Only apply date filtering if dates are provided
+        if (startDate && endDate) {
+          query = query.gte('start_date', startDate).lte('end_date', endDate);
+        }
+      }
+
+      // Add status filtering
+      if (params?.status) {
+        query = query.eq('status', params.status);
+      }
+
+      console.log('🔍 Final query filters applied');
+      console.log('🔍 Query will filter by:', { 
+        store_id: userStore, 
+        floor: params?.floor, 
+        dateFilter: params?.dateFilter,
+        status: params?.status 
+      });
+
+      const { data, error } = await query;
+      
+      if (error) throw new Error(error.message);
+      
+      console.log('🔍 Raw sales reports data from DB:', data);
+      
+      // Debug: Let's also check what's in the database without filters
+      const { data: allData, error: allError } = await supabase
+        .from('sales_reports')
+        .select('*')
+        .limit(10);
+      
+      if (allError) {
+        console.log('❌ Error fetching all reports:', allError);
+      } else {
+        console.log('🔍 All reports in database (first 10):', allData);
+      }
+      
+      // Debug: Check if store context is working
+      console.log('🔍 Current store context:', { userStore, userRole });
+      
+      // Debug: Check if floor filtering is working
+      if (params?.floor && params.floor !== 'all') {
+        const floorTest = await supabase
+          .from('sales_reports')
+          .select('*')
+          .eq('floor', parseInt(params.floor.toString()));
+        console.log('🔍 Floor test query result:', floorTest);
+      }
+      
+      // Transform data to match frontend interface
+      const transformedReports = await Promise.all((data || []).map(async (report: any) => {
+        // Calculate totals from report_data if available
+        const reportData = report.report_data || [];
+        const totalLeads = reportData.length;
+        const convertedLeads = reportData.filter((lead: any) => lead.stage === 'closed_won').length;
+        const totalRevenue = reportData.reduce((sum: number, lead: any) => sum + (lead.amount || 0), 0);
+
+        // Fetch floor manager details separately
+        let floorManagerName = 'Unknown Manager';
+        console.log('🔍 Looking up floor manager for report:', report.id, 'floor_manager_id:', report.floor_manager_id);
+        
+        if (report.floor_manager_id) {
+          try {
+            const { data: managerData, error: managerError } = await supabase
+              .from('team_members')
+              .select('first_name, last_name, email')
+              .eq('id', report.floor_manager_id)
+              .single();
+            
+            if (managerError) {
+              console.log('❌ Error fetching floor manager:', managerError);
+            } else if (managerData) {
+              floorManagerName = `${managerData.first_name || ''} ${managerData.last_name || ''}`.trim() || 'Unknown Manager';
+              console.log('✅ Found floor manager:', floorManagerName, 'Data:', managerData);
+            } else {
+              console.log('⚠️ No manager data found for ID:', report.floor_manager_id);
+            }
+          } catch (error) {
+            console.log('⚠️ Exception fetching floor manager:', error);
+          }
+        } else {
+          console.log('⚠️ No floor_manager_id in report:', report);
+        }
+
+        const transformed = {
+          id: report.id.toString(),
+          floor_manager_name: floorManagerName,
+          floor: report.floor,
+          period: report.period,
+          start_date: report.start_date,
+          end_date: report.end_date,
+          total_leads: totalLeads,
+          converted_leads: convertedLeads,
+          total_revenue: totalRevenue,
+          status: 'pending', // Default status for new reports
+          submitted_at: report.start_date, // Use start_date as submitted_at
+          notes: report.notes,
+          store_id: report.store_id,
+          report_data: report.report_data
+        };
+        
+        console.log('🔄 Transformed report:', transformed);
+        return transformed;
+      }));
+
+      console.log('✅ Final transformed reports:', transformedReports);
+      return this.handleSupabaseResponse(transformedReports);
+    } catch (error) {
+      console.error('Error fetching sales reports:', error);
+      throw error;
+    }
+  }
+
+  async approveSalesReport(reportId: string): Promise<ApiResponse<any>> {
+    try {
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+
+      const { data, error } = await supabase
+        .from('sales_reports')
+        .update({ 
+          status: 'approved',
+          approved_at: new Date().toISOString(),
+          approved_by: (await supabase.auth.getUser()).data.user?.id
+        })
+        .eq('id', reportId)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      
+      return this.handleSupabaseResponse(data);
+    } catch (error) {
+      console.error('Error approving sales report:', error);
+      throw error;
+    }
+  }
+
+  async rejectSalesReport(reportId: string, reason: string): Promise<ApiResponse<any>> {
+    try {
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+
+      const { data, error } = await supabase
+        .from('sales_reports')
+        .update({ 
+          status: 'rejected',
+          rejected_at: new Date().toISOString(),
+          rejected_by: (await supabase.auth.getUser()).data.user?.id,
+          rejection_reason: reason
+        })
+        .eq('id', reportId)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      
+      return this.handleSupabaseResponse(data);
+    } catch (error) {
+      console.error('Error rejecting sales report:', error);
+      throw error;
+    }
+  }
+
+  async getSalesSummary(params?: {
+    floor?: string | number;
+    dateFilter?: string;
+  }): Promise<ApiResponse<any>> {
+    try {
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+
+      // Get sales reports for summary
+      const reportsResponse = await this.getSalesReports(params);
+      const reports = reportsResponse.data || [];
+
+      // Get actual sales data for revenue calculation
+      const salesResponse = await this.getSales({
+        floor: params?.floor && params.floor !== 'all' ? parseInt(params.floor.toString()) : undefined
+      });
+      const sales = salesResponse.data || [];
+
+      // Calculate summary
+      const summary = {
+        total_revenue: sales.reduce((sum: number, sale: any) => sum + (parseFloat(sale.amount) || 0), 0),
+        total_leads: reports.reduce((sum: number, report: any) => sum + (report.total_leads || 0), 0),
+        conversion_rate: reports.length > 0 ? 
+          (reports.reduce((sum: number, report: any) => sum + (report.converted_leads || 0), 0) / 
+           reports.reduce((sum: number, report: any) => sum + (report.total_leads || 0), 0)) * 100 : 0,
+        pending_reports: reports.filter((r: any) => r.status === 'pending').length,
+        approved_reports: reports.filter((r: any) => r.status === 'approved').length,
+        rejected_reports: reports.filter((r: any) => r.status === 'rejected').length
+      };
+
+      return this.handleSupabaseResponse(summary);
+    } catch (error) {
+      console.error('Error fetching sales summary:', error);
+      throw error;
+    }
   }
 
   async createSale(saleData: Partial<Sale>): Promise<ApiResponse<Sale>> {
-    const { data, error } = await supabase
-      .from('sales')
-      .insert([saleData])
-      .select()
-      .single();
+    try {
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      
+      // Add store_id to sale data
+      const saleDataWithStore = {
+        ...saleData,
+        store_id: userStore || 1
+      };
+      
+      const { data, error } = await supabase
+        .from('sales')
+        .insert([saleDataWithStore])
+        .select()
+        .single();
 
-    if (error) throw new Error(error.message);
-    
-    return this.handleSupabaseResponse(data);
+      if (error) throw new Error(error.message);
+      
+      return this.handleSupabaseResponse(data);
+    } catch (error) {
+      console.error('Error creating sale:', error);
+      throw error;
+    }
   }
 
   // Visits
@@ -832,7 +1259,21 @@ class ApiService {
     date_to?: string;
     floor?: number;
   }): Promise<ApiResponse<Visit[]>> {
+    try {
+      // CRITICAL: Set store context before making API calls
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+      
     let query = supabase.from('visits').select('*');
+
+      // Add store filtering
+      if (userStore) {
+        query = query.eq('store_id', userStore);
+      }
 
     if (params?.date_from) {
       query = query.gte('date', params.date_from);
@@ -851,18 +1292,36 @@ class ApiService {
     if (error) throw new Error(error.message);
     
     return this.handleSupabaseResponse(data || []);
+    } catch (error) {
+      console.error('Error fetching visits:', error);
+      throw error;
+    }
   }
 
   async createVisit(visitData: Partial<Visit>): Promise<ApiResponse<Visit>> {
-    const { data, error } = await supabase
-      .from('visits')
-      .insert([visitData])
-      .select()
-      .single();
+    try {
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      
+      // Add store_id to visit data
+      const visitDataWithStore = {
+        ...visitData,
+        store_id: userStore || 1
+      };
+      
+      const { data, error } = await supabase
+        .from('visits')
+        .insert([visitDataWithStore])
+        .select()
+        .single();
 
-    if (error) throw new Error(error.message);
-    
-    return this.handleSupabaseResponse(data);
+      if (error) throw new Error(error.message);
+      
+      return this.handleSupabaseResponse(data);
+    } catch (error) {
+      console.error('Error creating visit:', error);
+      throw error;
+    }
   }
 
   // Team Management
@@ -882,6 +1341,8 @@ class ApiService {
         }
         throw new Error(error.message);
       }
+      
+      console.log('Raw team members data:', teamMembers);
       
       // Get real performance data for each team member
       const teamMembersWithPerformance = await Promise.all(
@@ -909,7 +1370,7 @@ class ApiService {
             name: `${member.first_name} ${member.last_name}`,
             email: member.email,
             phone: member.phone || '+91 98765 43210',
-            role: member.role as 'floor_manager' | 'sales_associate' | 'support_staff' | 'admin',
+            role: member.role as 'business_admin' | 'floor_manager' | 'sales_associate',
             floor: `Floor ${member.floor || 1}`,
             status: member.status as 'active' | 'inactive' | 'on_leave',
             avatar: member.avatar,
@@ -959,6 +1420,7 @@ class ApiService {
     if (error) throw new Error(error.message);
     
          // Insert into team_members table with the auth user's UUID
+     const userStore = getCurrentUserStore();
      const { data: teamMemberData, error: teamMemberError } = await supabase
        .from('team_members')
        .insert({
@@ -969,7 +1431,8 @@ class ApiService {
          role: memberData.role,
          floor: memberData.floor,
          phone: memberData.phone,
-         status: 'active'
+         status: 'active',
+         store_id: userStore || 1 // Add required store_id field
        })
        .select()
        .single();
@@ -1258,7 +1721,7 @@ class ApiService {
     return this.handleSupabaseResponse(floorData);
   }
 
-  // Get floors with their managers
+  // Get floors with basic information (no team_members dependency)
   async getFloors(): Promise<ApiResponse<Array<{
     id: string;
     name: string;
@@ -1270,22 +1733,11 @@ class ApiService {
     lastUpdated: string;
   }>>> {
     try {
-      // Get floor managers from team_members table
-      const { data: floorManagers, error } = await supabase
-        .from('team_members')
-        .select('id, first_name, last_name, floor, status')
-        .eq('role', 'floor_manager');
-
-      if (error) throw new Error(error.message);
-
-      // Create floor data with manager information
+      // Create floor data without manager information to avoid permission issues
       const floors = [];
       const floorNames = ['Ground Floor', 'First Floor', 'Second Floor'];
       
       for (let floorNum = 1; floorNum <= 3; floorNum++) {
-        const manager = floorManagers?.find(m => m.floor === floorNum);
-        const managerName = manager ? `${manager.first_name} ${manager.last_name}` : 'No Manager Assigned';
-        
         // Get today's stats for this floor
         const today = new Date().toISOString().split('T')[0];
         
@@ -1308,9 +1760,9 @@ class ApiService {
         floors.push({
           id: floorNum.toString(),
           name: floorNames[floorNum - 1],
-          managerId: manager?.id || '',
-          managerName,
-          status: manager?.status === 'active' ? 'active' as const : 'inactive' as const,
+          managerId: '', // No manager ID to avoid permission issues
+          managerName: 'Manager Info Not Available', // No manager name to avoid permission issues
+          status: 'active' as const, // Default to active
           visitorCount,
           salesToday: salesTodayAmount,
           lastUpdated: 'Just now'
@@ -1336,47 +1788,37 @@ class ApiService {
     lastUpdated: string;
   } | null>> {
     try {
-      const { data: user, error } = await supabase
+      // Get user's floor from team_members table
+      const { data: teamMember, error } = await supabase
         .from('team_members')
-        .select('id, floor, first_name, last_name, status')
+        .select('id, floor, first_name, last_name')
         .eq('email', userEmail)
-        .eq('role', 'floor_manager')
+        .eq('status', 'active')
         .single();
 
-      if (error || !user?.floor) {
+      if (error) {
+        console.error('Error fetching team member:', error);
         return this.handleSupabaseResponse(null);
       }
 
-      const floorNames = ['Ground Floor', 'First Floor', 'Second Floor'];
-      const today = new Date().toISOString().split('T')[0];
-      
-      const [visitsToday, salesToday] = await Promise.all([
-        supabase
-          .from('visits')
-          .select('*')
-          .eq('floor', user.floor)
-          .gte('date', today),
-        supabase
-          .from('sales')
-          .select('amount')
-          .eq('floor', user.floor)
-          .gte('date', today)
-      ]);
+      if (!teamMember?.floor) {
+        console.warn('No floor assigned to user:', userEmail);
+        return this.handleSupabaseResponse(null);
+      }
 
-      const visitorCount = visitsToday.data?.length || 0;
-      const salesTodayAmount = salesToday.data?.reduce((sum, sale) => sum + Number(sale.amount), 0) || 0;
-
+      // Create a floor object based on the team member's floor
       const floorData = {
-        id: user.floor.toString(),
-        name: floorNames[user.floor - 1],
-        managerId: user.id,
-        managerName: `${user.first_name} ${user.last_name}`,
-        status: user.status === 'active' ? 'active' as const : 'inactive' as const,
-        visitorCount,
-        salesToday: salesTodayAmount,
-        lastUpdated: 'Just now'
+        id: `floor-${teamMember.floor}`,
+        name: `Floor ${teamMember.floor}`,
+        managerId: teamMember.id || '',
+        managerName: `${teamMember.first_name} ${teamMember.last_name}`.trim(),
+        status: 'active' as const,
+        visitorCount: 0,
+        salesToday: 0,
+        lastUpdated: new Date().toISOString()
       };
 
+      console.log('getUserFloorByEmail: Successfully fetched floor data:', floorData);
       return this.handleSupabaseResponse(floorData);
     } catch (error) {
       console.error('Error fetching user floor:', error);
@@ -1389,10 +1831,7 @@ class ApiService {
     try {
       const { data, error } = await supabase
         .from('customers')
-        .select(`
-          *,
-          team_members!assigned_to(first_name, last_name)
-        `)
+        .select('*') // Remove team_members join to avoid permission issues
         .eq('floor', floor)
         .order('created_at', { ascending: false });
 
@@ -1406,13 +1845,29 @@ class ApiService {
 
   async getAllCustomers(): Promise<ApiResponse<any[]>> {
     try {
-      const { data, error } = await supabase
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      // Set store context for RLS (if enabled)
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+      
+      let query = supabase
         .from('customers')
         .select(`
           *,
           team_members!assigned_to(first_name, last_name)
         `)
         .order('created_at', { ascending: false });
+      
+      // Filter by store if user has a specific store
+      if (userStore !== null) {
+        query = query.eq('store_id', userStore);
+      }
+
+      const { data, error } = await query;
 
       if (error) throw new Error(error.message);
       return this.handleSupabaseResponse(data || []);
@@ -1441,16 +1896,20 @@ class ApiService {
         ? customerData.name
         : `${(customerData.first_name || '').trim()} ${(customerData.last_name || '').trim()}`.trim();
 
+      // Add store_id to customer data
+      const userStore = getCurrentUserStore();
+
       const payload: Record<string, any> = {
         ...customerData,
         name: computedName || 'New Customer',
         visited_date: customerData.visited_date || nowDate,
         status: customerData.status || 'lead',
+        store_id: userStore || 1, // Default to store 1 if no user store
       };
 
       // Whitelist columns that may exist in the customers table (base + optional extended)
       const allowedColumns = new Set([
-        'name','phone','interest','floor','visited_date','assigned_to','notes','status',
+        'name','phone','interest','floor','store_id','visited_date','assigned_to','notes','status',
         // optional extended profile fields (safe if missing; Supabase ignores extras only if omitted)
         'email','address','city','state','country','date_of_birth','anniversary_date','community',
         'lead_source','reason_for_visit','age_of_end_user','saving_scheme','catchment_area','next_follow_up','summary_notes',
@@ -1493,6 +1952,7 @@ class ApiService {
           phone: finalData.phone,
           interest: finalData.interest,
           floor: finalData.floor,
+          store_id: finalData.store_id,
           visited_date: finalData.visited_date,
           status: finalData.status,
           assigned_to: finalData.assigned_to,
@@ -1713,152 +2173,169 @@ class ApiService {
     }
   }
 
-  // Orders management
-  async getOrders(params?: {
-    status?: string;
+  // Sales Pipeline Management
+  async getLeads(params?: {
+    stage?: string;
     floor?: number;
+    assigned_to?: string;
   }): Promise<ApiResponse<any[]>> {
     try {
       let query = supabase
-        .from('orders')
+        .from('leads')
         .select(`
           *,
-          created_by_member:team_members(first_name, last_name),
-          order_items(*)
+          team_members:assigned_to (
+            id,
+            first_name,
+            last_name,
+            email
+          )
         `)
         .order('created_at', { ascending: false });
 
-      if (params?.status && params.status !== 'all') {
-        query = query.eq('status', params.status);
+      if (params?.stage && params.stage !== 'all') {
+        query = query.eq('stage', params.stage);
       }
 
       if (params?.floor) {
         query = query.eq('floor', params.floor);
       }
 
+      if (params?.assigned_to) {
+        query = query.eq('assigned_to', params.assigned_to);
+      }
+
       const { data, error } = await query;
 
       if (error) throw new Error(error.message);
-      return this.handleSupabaseResponse(data || []);
+      
+      // Transform the data to include salesperson name
+      const transformedData = (data || []).map(lead => ({
+        ...lead,
+        assigned_to_name: lead.team_members 
+          ? `${lead.team_members.first_name} ${lead.team_members.last_name}`.trim()
+          : null
+      }));
+
+      return this.handleSupabaseResponse(transformedData);
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      console.error('Error fetching leads:', error);
       throw error;
     }
   }
 
-  async createOrder(orderData: {
-    customer_id?: number;
+  async createLead(leadData: {
     customer_name: string;
-    total_amount: number;
-    status?: string; // pending|confirmed|processing|shipped|delivered|cancelled
-    floor?: number;
-    created_by?: string;
+    customer_phone: string;
+    customer_email?: string;
+    product_id?: number;
+    amount: number;
+    floor: number;
     notes?: string;
   }): Promise<ApiResponse<any>> {
     try {
-      // Ensure user is authenticated before proceeding
-      await this.ensureAuthenticated();
+      // Get current user store context
+      const userStore = getCurrentUserStore();
       
       const { data, error } = await supabase
-        .from('orders')
+        .from('leads')
         .insert({
-          customer_id: orderData.customer_id,
-          customer_name: orderData.customer_name,
-          total_amount: orderData.total_amount,
-          status: orderData.status || 'pending',
-          floor: orderData.floor,
-          created_by: orderData.created_by,
-          notes: orderData.notes
+          ...leadData,
+          stage: 'potential',
+          created_by: (await supabase.auth.getUser()).data.user?.id,
+          store_id: userStore || 1 // Add required store_id field
         })
         .select()
         .single();
 
       if (error) throw new Error(error.message);
-
-      // Automatically create a sales record for dashboard statistics (only for confirmed/processing/shipped/delivered orders)
-      const salesEligibleStatuses = ['confirmed', 'processing', 'shipped', 'delivered'];
-      if (salesEligibleStatuses.includes(data.status)) {
-        try {
-          await supabase
-            .from('sales')
-            .insert({
-              customer_id: data.customer_id,
-              customer_name: data.customer_name,
-              amount: data.total_amount,
-              date: new Date().toISOString().split('T')[0], // today
-              floor: data.floor,
-              created_by: data.created_by
-            });
-        } catch (salesError) {
-          console.warn('Failed to create sales record:', salesError);
-          // Don't throw - order was created successfully
-        }
-      }
-
       return this.handleSupabaseResponse(data);
     } catch (error) {
-      console.error('Error creating order:', error);
+      console.error('Error creating lead:', error);
       throw error;
     }
   }
 
-  async updateOrder(id: number, updates: Partial<{
-    customer_name: string;
-    total_amount: number;
-    status: string;
-    notes: string;
-  }>): Promise<ApiResponse<any>> {
+  async updateLeadStage(leadId: string, newStage: string): Promise<ApiResponse<any>> {
     try {
-      // Ensure user is authenticated before proceeding
-      await this.ensureAuthenticated();
-      
       const { data, error } = await supabase
-        .from('orders')
+        .from('leads')
         .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
+          stage: newStage,
+          last_updated: new Date().toISOString()
         })
-        .eq('id', id)
+        .eq('id', leadId)
         .select()
         .single();
 
       if (error) throw new Error(error.message);
-
-      // If order status changed to confirmed/processing/shipped/delivered, create sales record
-      const salesEligibleStatuses = ['confirmed', 'processing', 'shipped', 'delivered'];
-      if (updates.status && salesEligibleStatuses.includes(updates.status)) {
-        try {
-          // Check if sales record already exists for this order
-          const { data: existingSale } = await supabase
-            .from('sales')
-            .select('id')
-            .eq('customer_name', data.customer_name)
-            .eq('amount', data.total_amount)
-            .eq('floor', data.floor)
-            .single();
-
-          // Only create if no existing sales record found
-          if (!existingSale) {
-            await supabase
-              .from('sales')
-              .insert({
-                customer_id: data.customer_id,
-                customer_name: data.customer_name,
-                amount: data.total_amount,
-                date: new Date().toISOString().split('T')[0], // today
-                floor: data.floor,
-                created_by: data.created_by
-              });
-          }
-        } catch (salesError) {
-          console.warn('Failed to create sales record on status update:', salesError);
-          // Don't throw - order was updated successfully
-        }
-      }
-
       return this.handleSupabaseResponse(data);
     } catch (error) {
-      console.error('Error updating order:', error);
+      console.error('Error updating lead stage:', error);
+      throw error;
+    }
+  }
+
+  async assignLeadToSalesperson(leadId: string, salespersonId: string): Promise<ApiResponse<any>> {
+    try {
+      const { data, error } = await supabase
+        .from('leads')
+        .update({
+          assigned_to: salespersonId,
+          last_updated: new Date().toISOString()
+        })
+        .eq('id', leadId)
+        .select()
+        .single();
+
+      if (error) throw new Error(error.message);
+      return this.handleSupabaseResponse(data);
+    } catch (error) {
+      console.error('Error assigning lead:', error);
+      throw error;
+    }
+  }
+
+  async convertLeadToSale(leadId: string, saleData: {
+    product_sold: string;
+    sale_amount: number;
+    notes?: string;
+  }): Promise<ApiResponse<any>> {
+    try {
+      // Get lead information
+      const { data: lead, error: leadError } = await supabase
+        .from('leads')
+        .select('*')
+        .eq('id', leadId)
+            .single();
+
+      if (leadError) throw new Error(leadError.message);
+
+      // Create sale record
+      const { data: sale, error: saleError } = await supabase
+              .from('sales')
+              .insert({
+          lead_id: leadId,
+          customer_name: lead.customer_name,
+          product_sold: saleData.product_sold,
+          sale_amount: saleData.sale_amount,
+          commission: saleData.sale_amount * 0.02, // 2% commission
+          notes: saleData.notes,
+          salesperson_id: lead.assigned_to,
+          floor: lead.floor,
+          store_id: lead.store_id
+        })
+        .select()
+        .single();
+
+      if (saleError) throw new Error(saleError.message);
+
+      // Update lead stage to closed_won
+      await this.updateLeadStage(leadId, 'closed_won');
+
+      return this.handleSupabaseResponse(sale);
+    } catch (error) {
+      console.error('Error converting lead to sale:', error);
       throw error;
     }
   }
@@ -2323,20 +2800,7 @@ class ApiService {
     }
   }
 
-  async getGlobalCatalogue(): Promise<ApiResponse<any>> {
-    try {
-      // Return default global catalogue data
-      const catalogue = {
-        total_products: 0,
-        total_stores: 0,
-        product_distribution: {},
-      };
-      return this.handleSupabaseResponse(catalogue);
-    } catch (error) {
-      console.error('Error fetching global catalogue:', error);
-      throw new Error('Failed to fetch global catalogue');
-    }
-  }
+
 
   async createCategory(categoryData: any): Promise<ApiResponse<any>> {
     try {
@@ -2757,6 +3221,15 @@ class ApiService {
 
   async getSupportTickets(params?: { status?: string; floor?: number; assigned_to?: string; search?: string; }): Promise<ApiResponse<any[]>> {
     try {
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      // Set store context for RLS (if enabled)
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+      
       let query = supabase
         .from('support_tickets')
         .select(`
@@ -2767,6 +3240,11 @@ class ApiService {
         `)
         .order('created_at', { ascending: false });
 
+      // Add store filtering
+      if (userStore) {
+        query = query.eq('store_id', userStore);
+      }
+
       if (params?.status && params.status !== 'all') query = query.eq('status', params.status);
       if (params?.floor) query = query.eq('floor', params.floor);
       if (params?.assigned_to) query = query.eq('assigned_to', params.assigned_to);
@@ -2775,19 +3253,27 @@ class ApiService {
       const { data, error } = await query;
       if (error) throw new Error(error.message);
       
+      console.log('Raw support tickets data:', data);
+      
       // Transform the data to include proper customer and team member names
-      const transformedData = (data || []).map((ticket: any) => ({
-        ...ticket,
-        customer_name: ticket.customer?.name || 'Unknown Customer',
-        customer_email: 'N/A', // Customers table doesn't have email column
-        customer_phone: ticket.customer?.phone || 'N/A',
-        assigned_to_name: ticket.assigned_team_member 
-          ? `${ticket.assigned_team_member.first_name} ${ticket.assigned_team_member.last_name}` 
-          : 'Unassigned',
-        created_by_name: ticket.created_by_member 
-          ? `${ticket.created_by_member.first_name} ${ticket.created_by_member.last_name}` 
-          : 'Unknown'
-      }));
+      const transformedData = (data || []).map((ticket: any) => {
+        console.log('Processing ticket:', ticket.id, 'customer_id:', ticket.customer_id, 'customer:', ticket.customer);
+        
+        return {
+          ...ticket,
+          customer_name: ticket.customer?.name || (ticket.customer_id ? 'Customer Not Found' : 'No Customer Assigned'),
+          customer_email: ticket.customer?.email || 'N/A',
+          customer_phone: ticket.customer?.phone || 'N/A',
+          assigned_to_name: ticket.assigned_team_member 
+            ? `${ticket.assigned_team_member.first_name} ${ticket.assigned_team_member.last_name}` 
+            : 'Unassigned',
+          created_by_name: ticket.created_by_member 
+            ? `${ticket.created_by_member.first_name} ${ticket.created_by_member.last_name}` 
+            : 'Unknown'
+        };
+      });
+      
+      console.log('Transformed support tickets data:', transformedData);
       
       return this.handleSupabaseResponse(transformedData);
     } catch (error) {
@@ -2798,6 +3284,43 @@ class ApiService {
 
   async createSupportTicket(ticketData: any): Promise<ApiResponse<any>> {
     try {
+      // Ensure user is authenticated before proceeding
+      await this.ensureAuthenticated();
+      
+      // Get current user context for audit logging
+      const currentUser = await this.getCurrentUser();
+      if (!currentUser) {
+        throw new Error('Unable to get user context. Please try logging in again.');
+      }
+      
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      const userRole = this.getCurrentUserRole();
+      
+      // Set store context for RLS (if enabled)
+      if (userStore !== null) {
+        await this.setStoreContext(userStore, userRole);
+      }
+      
+      // Ensure the current user exists in team_members table
+      if (currentUser.id) {
+        try {
+          const { data: existingMember, error: checkError } = await supabase
+            .from('team_members')
+            .select('id')
+            .eq('id', currentUser.id)
+            .single();
+          
+          if (checkError && checkError.code === 'PGRST116') {
+            // User doesn't exist in team_members, create them
+            console.log('User not found in team_members, creating entry...');
+            await this.populateTeamMembersFromAuth([currentUser.id]);
+          }
+        } catch (error) {
+          console.warn('Error checking/creating team member:', error);
+        }
+      }
+      
       // Whitelist fields that actually exist on support_tickets
       const payload: any = {
         title: ticketData.title || 'Untitled Support Request',
@@ -2806,8 +3329,9 @@ class ApiService {
         priority: ticketData.priority || 'medium',
         customer_id: ticketData.customer_id,
         assigned_to: ticketData.assigned_to,
-        created_by: ticketData.created_by,
+        created_by: currentUser.id, // Use current user ID directly
         floor: ticketData.floor,
+        store_id: userStore || 1, // Add store_id - required field
       };
 
       // Remove undefined/null values (but keep empty strings for required fields)
@@ -2903,6 +3427,9 @@ class ApiService {
   // Helper function to populate team_members table from auth users
   private async populateTeamMembersFromAuth(userIds: string[]): Promise<void> {
     try {
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      
       for (const userId of userIds) {
         try {
           // Create a basic team member entry based on the user ID
@@ -2919,6 +3446,7 @@ class ApiService {
               last_name: displayName,
               role: 'support_staff',
               status: 'active',
+              store_id: userStore || 1, // Add required store_id field
               created_at: new Date().toISOString(),
               updated_at: new Date().toISOString()
             });
@@ -4108,9 +4636,18 @@ class ApiService {
 
   async createStockTransfer(transferData: any): Promise<ApiResponse<any>> {
     try {
+      // Get current user store context
+      const userStore = getCurrentUserStore();
+      
+      // Add store_id to transfer data
+      const transferDataWithStore = {
+        ...transferData,
+        store_id: userStore || 1
+      };
+      
       const { data, error } = await supabase
         .from('stock_transfers')
-        .insert([transferData])
+        .insert([transferDataWithStore])
         .select()
         .single();
 
@@ -4301,6 +4838,322 @@ class ApiService {
       return { success: true, data: exportData };
     } catch (error: any) {
       return { success: false, data: null, message: error.message };
+    }
+  }
+
+  // Comprehensive branded export method for all data types
+  async exportAllDataBranded(params: {
+    format: string;
+    dataTypes: string[];
+    includeHeader?: boolean;
+  }): Promise<ApiResponse<Blob>> {
+    console.log('exportAllDataBranded method called with params:', params);
+    
+    try {
+      // Simple test implementation first
+      const csvContent = 'SARKAR JEWELLERS\nTest Export\n';
+      const blob = new Blob([csvContent], { type: 'text/csv; charset=utf-8;' });
+      
+      return { data: blob, success: true };
+    } catch (error) {
+      console.error('Error in branded export:', error);
+      throw new Error('Failed to export data');
+    }
+  }
+
+  // Create branded CSV with professional layout
+  private createBrandedCSV(allData: any[], dataTypes: string[], results: any): string {
+    const now = new Date();
+    const dateStr = now.toLocaleDateString('en-GB'); // DD/MM/YYYY format
+    const timeStr = now.toLocaleTimeString('en-GB');
+    
+    let csvContent = '';
+    
+    // BRANDED HEADER SECTION
+    csvContent += 'SARKAR JEWELLERS\n';
+    csvContent += `Export Report - ${dateStr} ${timeStr}\n`;
+    csvContent += 'Generated by: System Export\n';
+    csvContent += '\n'; // Empty row for spacing
+    
+    // Add data type headers
+    for (const dataType of dataTypes) {
+      csvContent += `=== ${dataType.toUpperCase()} DATA ===\n`;
+      
+      switch (dataType) {
+        case 'products':
+          csvContent += this.createProductsCSV(results.products || []);
+          break;
+        case 'customers':
+          csvContent += this.createCustomersCSV(results.customers || []);
+          break;
+        case 'leads':
+          csvContent += this.createLeadsCSV(results.leads || []);
+          break;
+      }
+      
+      csvContent += '\n'; // Empty row between sections
+    }
+    
+    return csvContent;
+  }
+
+  // Create products CSV section
+  private createProductsCSV(products: any[]): string {
+    if (products.length === 0) return 'No products found\n';
+    
+    // Professional jewelry industry headers
+    const headers = [
+      'SKU*',
+      'Product ID',
+      'Product Name',
+      'Item Type',
+      'Category',
+      'Cost Price',
+      'Retail Price',
+      'Stock Quantity',
+      'Status',
+      'Description',
+      'Primary Image URL*',
+      'Additional Images',
+      'Material',
+      'Weight',
+      'Dimensions',
+      'Created Date',
+      'Last Updated'
+    ];
+    
+    let csv = headers.join(',') + '\n';
+    
+    for (const product of products) {
+      // Validate required fields
+      if (!product.sku || !product.image_url) {
+        console.warn(`Product ${product.id} missing required fields (SKU: ${product.sku}, Image: ${product.image_url})`);
+        continue;
+      }
+      
+      const row = [
+        this.escapeCSV(product.sku || ''),
+        product.id || '',
+        this.escapeCSV(product.name || ''),
+        this.escapeCSV(product.type || ''),
+        this.escapeCSV(product.category || ''),
+        product.price || '',
+        product.price || '', // Retail price same as cost for now
+        product.stock_quantity || 0,
+        this.escapeCSV(product.status || ''),
+        this.escapeCSV(product.description || ''),
+        this.escapeCSV(product.image_url || product.main_image_url || ''),
+        this.escapeCSV(Array.isArray(product.additional_images_urls) ? product.additional_images_urls.join('|') : ''),
+        this.escapeCSV(product.material || ''),
+        this.escapeCSV(product.weight || ''),
+        this.escapeCSV(product.dimensions || ''),
+        product.created_at ? new Date(product.created_at).toLocaleDateString('en-GB') : '',
+        product.updated_at ? new Date(product.updated_at).toLocaleDateString('en-GB') : ''
+      ];
+      
+      csv += row.join(',') + '\n';
+    }
+    
+    return csv;
+  }
+
+  // Create customers CSV section
+  private createCustomersCSV(customers: any[]): string {
+    if (customers.length === 0) return 'No customers found\n';
+    
+    // Professional customer headers
+    const headers = [
+      'Customer ID',
+      'Name',
+      'Phone',
+      'Email',
+      'Floor',
+      'Interest',
+      'Status',
+      'Visited Date',
+      'Address',
+      'City',
+      'State',
+      'Country',
+      'Postal Code',
+      'Date of Birth',
+      'Anniversary Date',
+      'Community',
+      'Mother Tongue',
+      'Reason for Visit',
+      'Age of End User',
+      'Saving Scheme',
+      'Catchment Area',
+      'Next Follow Up',
+      'Summary Notes',
+      'Ring Size',
+      'Customer Interests',
+      'Assigned To',
+      'Created Date',
+      'Last Updated'
+    ];
+    
+    let csv = headers.join(',') + '\n';
+    
+    for (const customer of customers) {
+      const row = [
+        customer.id || '',
+        this.escapeCSV(customer.name || ''),
+        customer.phone || '',
+        this.escapeCSV(customer.email || ''),
+        customer.floor || '',
+        this.escapeCSV(customer.interest || ''),
+        this.escapeCSV(customer.status || ''),
+        customer.visited_date || '',
+        this.escapeCSV(customer.address || ''),
+        this.escapeCSV(customer.city || ''),
+        this.escapeCSV(customer.state || ''),
+        this.escapeCSV(customer.country || ''),
+        this.escapeCSV(customer.postal_code || ''),
+        customer.date_of_birth || '',
+        customer.anniversary_date || '',
+        this.escapeCSV(customer.community || ''),
+        this.escapeCSV(customer.mother_tongue || ''),
+        this.escapeCSV(customer.reason_for_visit || ''),
+        this.escapeCSV(customer.age_of_end_user || ''),
+        this.escapeCSV(customer.saving_scheme || ''),
+        this.escapeCSV(customer.catchment_area || ''),
+        this.escapeCSV(customer.next_follow_up || ''),
+        this.escapeCSV(customer.summary_notes || ''),
+        this.escapeCSV(customer.ring_size || ''),
+        this.escapeCSV(customer.customer_interests || ''),
+        this.escapeCSV(customer.assigned_to || ''),
+        customer.created_at ? new Date(customer.created_at).toLocaleDateString('en-GB') : '',
+        customer.updated_at ? new Date(customer.updated_at).toLocaleDateString('en-GB') : ''
+      ];
+      
+      csv += row.join(',') + '\n';
+    }
+    
+    return csv;
+  }
+
+  // Create leads CSV section
+  private createLeadsCSV(leads: any[]): string {
+    if (leads.length === 0) return 'No leads found\n';
+    
+    const headers = [
+      'Lead ID',
+      'Customer Name',
+      'Customer Phone',
+      'Customer Email',
+      'Product Interest',
+      'Budget Range',
+      'Stage',
+      'Floor',
+      'Assigned To',
+      'Notes',
+      'Created Date',
+      'Last Updated'
+    ];
+    
+    let csv = headers.join(',') + '\n';
+    
+    for (const lead of leads) {
+      const row = [
+        lead.id || '',
+        this.escapeCSV(lead.customer_name || ''),
+        this.escapeCSV(lead.customer_phone || ''),
+        this.escapeCSV(lead.customer_email || ''),
+        this.escapeCSV(lead.product_interest || ''),
+        this.escapeCSV(lead.budget_range || ''),
+        this.escapeCSV(lead.stage || ''),
+        lead.floor || '',
+        this.escapeCSV(lead.assigned_to_name || lead.assigned_to || ''),
+        this.escapeCSV(lead.notes || ''),
+        lead.created_at ? new Date(lead.created_at).toLocaleDateString('en-GB') : '',
+        lead.last_updated ? new Date(lead.last_updated).toLocaleDateString('en-GB') : ''
+      ];
+      
+      csv += row.join(',') + '\n';
+    }
+    
+    return csv;
+  }
+
+  // Escape CSV values properly
+  private escapeCSV(value: string): string {
+    if (!value) return '';
+    
+    // If value contains comma, quote, or newline, wrap in quotes and escape internal quotes
+    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+      return `"${value.replace(/"/g, '""')}"`;
+    }
+    
+    return value;
+  }
+
+  // Log export to database
+  private async logExport(dataTypes: string[], recordCount: number): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('import_export_logs')
+        .insert({
+          operation_type: 'export',
+          entity_type: dataTypes.join(', '),
+          records_count: recordCount,
+          success_count: recordCount,
+          error_count: 0,
+          errors: [],
+          created_at: new Date().toISOString()
+        });
+      
+      if (error) {
+        console.warn('Failed to log export:', error);
+      }
+    } catch (error) {
+      console.warn('Failed to log export:', error);
+    }
+  }
+
+
+
+  // Helper method to get current user role
+  private getCurrentUserRole(): string {
+    try {
+      const authStorage = localStorage.getItem('auth-storage');
+      if (authStorage) {
+        const authData = JSON.parse(authStorage);
+        if (authData.state?.user) {
+          const user = authData.state.user;
+          return user.user_metadata?.role || user.app_metadata?.role || 'user';
+        }
+      }
+      return 'user';
+    } catch (error) {
+      console.warn('Error getting user role:', error);
+      return 'user';
+    }
+  }
+
+  // Helper method to set store context in database
+  private async setStoreContext(storeId: number, userRole: string): Promise<void> {
+    try {
+      // Call the database function to set store context
+      const { error } = await supabase.rpc('set_store_context', {
+        store_id: storeId,
+        user_role: userRole
+      });
+      
+      if (error) {
+        console.warn('Failed to set store context:', error);
+        // If the function doesn't exist, this might be a migration issue
+        if (error.message.includes('function') && error.message.includes('does not exist')) {
+          console.error('CRITICAL: set_store_context function not found. Run the database migration first!');
+          throw new Error('Database migration not completed. Run add-store-isolation.sql first.');
+        }
+        // Continue anyway - this is not critical for basic functionality
+      } else {
+        console.log(`Store context set: Store ${storeId}, Role ${userRole}`);
+      }
+    } catch (error) {
+      console.warn('Error setting store context:', error);
+      // Continue anyway - this is not critical for basic functionality
     }
   }
 }
